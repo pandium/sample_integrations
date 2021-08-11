@@ -1,0 +1,13 @@
+{
+  "name": "hubspot-to-s3--node",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node ."
+  },
+  "dependencies": {
+    "@hubspot/api-client": "^3.4.1",
+    "aws-sdk": "^2.878.0",
+    "csv-parse": "^4.15.3",
+    "dotenv": "^8.2.0"
+  }
+}

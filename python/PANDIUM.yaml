@@ -1,0 +1,37 @@
+version: 0.4
+base: python:3.7 # Node, Ruby, PHP, Java, GO
+build: pipenv install # for python Pipfile or requirements
+run: pipenv run python -m hubspot2s3 # Only certain invocations acceptable depending on base
+
+connectors:
+ - hubspot
+ - aws # S3
+
+configs:
+  schema:
+    name: node_schema
+    properties:
+      s3_bucket_name:
+        type: string
+      s3_file_name:
+        type: string
+      make_contact:
+        type: boolean
+      make_company:
+        type: boolean
+    type: object
+  uischema:
+    elements:
+    - label: S3 Bucket Name
+      scope: '#/properties/s3_bucket_name'
+      type: Control
+    - label: S3 File Name
+      scope: '#/properties/s3_file_name'
+      type: Control
+    - label: Make Contact?
+      scope: '#/properties/make_contact'
+      type: Control
+    - label: Make Company?
+      scope: '#/properties/make_company'
+      type: Control
+    type: VerticalLayout

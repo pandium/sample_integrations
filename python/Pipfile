@@ -1,0 +1,17 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+coloredlogs = "*"
+boto3 = "*"
+requests_oauthlib = "*"
+requests = "*"
+attrs = "*"
+
+[dev-packages]
+ipdb = "*"
+
+[requires]
+python_version = "3.7"

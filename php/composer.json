@@ -1,0 +1,10 @@
+{
+    "require": {
+        "aws/aws-sdk-php": "^3.178",
+        "league/csv": "^9.7",
+        "hubspot/api-client": "^2.8",
+        "vlucas/phpdotenv": "^5.3"
+    },
+    "name": "pandium/s3-to-hubspot--php",
+    "description": "S3 to Hubspot Sample Integration Script."
+}

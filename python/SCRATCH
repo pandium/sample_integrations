@@ -1,0 +1,16 @@
+
+
+
+Stdout is reserved for signaling back to the Pandium if there was an auth error with one or more of
+the configured connectors. You do this by stringing a json object with the following shape:
+
+```json
+{
+    "Pandium": {
+                    "Auth": {
+                                "CONNECTOR1_AUTH_STATUS": "Disconnected", 
+                                "CONNECTOR2_AUTH_STATUS": "Connected"
+                            }
+               }
+}
+```
