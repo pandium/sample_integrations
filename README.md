@@ -6,7 +6,7 @@
 
 Salutations,
 
-This is the home of a Pandium's Hubspot to S3 Sample integration. We have provide examples in multiple languages to show what goes into building an integration on Pandium, with your favorite tooling. In this example we are taking records that are stored in a CSV file hosted on Amazon S3, and syncing them to Hupspot as Contacts and/or Companies.
+This is the home of a Pandium's Hubspot to S3 Sample integration. We have provided examples in multiple languages to show what goes into building an integration on Pandium, with your favorite tooling. In this example we are taking records that are stored in a CSV file hosted on Amazon S3, and syncing them to Hupspot as Contacts and/or Companies.
 
 
 ## A CLI
