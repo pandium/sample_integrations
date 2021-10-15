@@ -20,7 +20,6 @@ def main
     hubspot = HubSpot.new(secrets, log)
     s3 = S3.new(config, secrets, log)
 
-    log.debug(context)
     log.debug("This run is in mode #{context['run_mode']}")
     resp = s3.download
     data = CSV.new resp.body.read
