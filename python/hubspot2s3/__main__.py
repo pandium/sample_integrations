@@ -22,13 +22,11 @@ def main():
 
     hs_api = HubspotAPI(config, secrets)
 
-    print("Config: ",config)
-
     s3_file = s3_download(
         access_key_id=secrets.aws_access_key_id,
         secret_access_key=secrets.aws_secret_access_key,
         bucket_name=config.s3_bucket_name,
-        path=config.s3_path
+        path=config.s3_file_name
     )
 
     reader = csv.DictReader(io.TextIOWrapper(s3_file, encoding='utf-8'))

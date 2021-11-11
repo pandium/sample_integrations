@@ -16,7 +16,7 @@ class HubspotAPI:
     def default_session(self):
         querystring = {}
         headers = {}
-        print("Debugging", self.secrets)
+
         if getattr(self.secrets, 'hubspot_hapikey', False):
             querystring['hapikey'] = self.secrets.hubspot_hapikey
         elif getattr(self.secrets, 'hubspot_oauth_access_token', False):
