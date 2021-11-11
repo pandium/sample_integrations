@@ -1,5 +1,5 @@
 import logging
-
+import sys
 import attr
 import requests
 
@@ -17,10 +17,14 @@ class HubspotAPI:
         querystring = {}
         headers = {}
 
-        if getattr(self.secrets, 'hubspot_hapikey'):
+        if getattr(self.secrets, 'hubspot_hapikey', False):
             querystring['hapikey'] = self.secrets.hubspot_hapikey
-        elif getattr(self.secrets, 'hubspot_access_token'):
+        elif getattr(self.secrets, 'hubspot_access_token', False):
             headers = {'Authorization': f'Bearer {self.secrets.hubspot_access_token}'}
+        else:
+            logger.error("hubspot_hapikey or hubspot_access_token not found")
+            logger.error("Exiting script")
+            sys.exit(1)
 
         s = requests.Session()
         s.params = querystring
