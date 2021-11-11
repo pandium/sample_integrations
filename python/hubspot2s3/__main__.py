@@ -22,6 +22,8 @@ def main():
 
     hs_api = HubspotAPI(config, secrets)
 
+    print("Config: ",config)
+
     s3_file = s3_download(
         access_key_id=secrets.aws_access_key_id,
         secret_access_key=secrets.aws_secret_access_key,
