@@ -2,7 +2,7 @@ import sys
 import logging
 import csv
 import io
-
+import json
 from .hubspot import HubspotAPI
 from .s3 import s3_download
 
@@ -34,7 +34,6 @@ def main():
     for row in reader:
         if truthy(config.make_contact):
             logger.info(f'Creating Contact: {row}')
-            logger.info(f"*** {row['company']} ***")
             resp = hs_api.create('contacts', data=hub_spot_contact_from_row(row))
             resp.raise_for_status()
 
@@ -47,7 +46,7 @@ def main():
 
 
 def hub_spot_contact_from_row(row):
-    return {
+    return json.dumps({
         'properties': [
             {
                 'property': 'email',
@@ -82,11 +81,11 @@ def hub_spot_contact_from_row(row):
                 'value': row['zip']
             }
         ]
-    }
+    })
 
 
 def hub_spot_company_from_row(row):
-    return {
+    return json.dumps({
         'properties': [
             {
                 'property': 'name',
@@ -97,7 +96,7 @@ def hub_spot_company_from_row(row):
                 'value': row['desc']
             }
         ]
-    }
+    })
 
 
 if __name__ == '__main__':

@@ -20,7 +20,9 @@ class HubspotAPI:
         if getattr(self.secrets, 'hubspot_hapikey', False):
             querystring['hapikey'] = self.secrets.hubspot_hapikey
         elif getattr(self.secrets, 'hubspot_oauth_access_token', False):
-            headers = {'Authorization': f'Bearer {self.secrets.hubspot_oauth_access_token}'}
+            headers = {}
+            headers["Content-Type"]="application/json"
+            headers['Authorization'] = f'Bearer {self.secrets.hubspot_oauth_access_token}'
         else:
             logger.error("hubspot_hapikey or hubspot_oauth_access_token not found")
             logger.error("Exiting script")
