@@ -41,6 +41,8 @@ def main():
             logger.info(f'Creating Company: {row}')
             resp = hs_api.create('companies', data=hub_spot_company_from_row(row))
             resp.raise_for_status()
+        
+    logger.info('Sync Complete')
 
 
 def hub_spot_contact_from_row(row):

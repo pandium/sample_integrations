@@ -28,7 +28,7 @@ public class Main {
 		System.out.println("This run is in mode: context.run_mode");
 
 		HubSpot hubSpot = new HubSpot(Secrets.getValue("hubspot_api_key"),
-				Secrets.getValue("hubspot_access_token"));
+				Secrets.getValue("hubspot_oauth_access_token"));
 
 		System.out.println(Config.getValue("s3_bucket_name"));
 

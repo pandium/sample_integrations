@@ -28,8 +28,8 @@ namespace hubspot2s3
 
             Console.WriteLine($"This run is in mode: {Context.GetValue("run_mode")}");
 
-            HubSpot _hubSpot = new HubSpot(Secrets.GetValue("hubspot-basic_api_key"),
-                    Secrets.GetValue("hubspot-oauth_access_token"));
+            HubSpot _hubSpot = new HubSpot(Secrets.GetValue("hubspot_basic_api_key"),
+                    Secrets.GetValue("hubspot_oauth_access_token"));
 
             S3 _s3File = new S3(Secrets.GetValue("aws_access_key_id"), Secrets.GetValue("aws_secret_access_key"),
                     Config.GetValue("s3_bucket_name"), Config.GetValue("s3_file_name"), Config.GetValue("s3_region_name"));
