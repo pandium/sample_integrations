@@ -2,7 +2,7 @@ import sys
 import logging
 import csv
 import io
-
+import json
 from .hubspot import HubspotAPI
 from .s3 import s3_download
 
@@ -46,7 +46,7 @@ def main():
 
 
 def hub_spot_contact_from_row(row):
-    return {
+    return json.dumps({
         'properties': [
             {
                 'property': 'email',
@@ -81,22 +81,22 @@ def hub_spot_contact_from_row(row):
                 'value': row['zip']
             }
         ]
-    }
+    })
 
 
 def hub_spot_company_from_row(row):
-    return {
+    return json.dumps({
         'properties': [
             {
-                'name': 'name',
+                'property': 'name',
                 'value': row['company']
             },
             {
-                'name': 'description',
+                'property': 'description',
                 'value': row['desc']
             }
         ]
-    }
+    })
 
 
 if __name__ == '__main__':
