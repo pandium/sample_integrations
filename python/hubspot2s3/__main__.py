@@ -34,6 +34,7 @@ def main():
     for row in reader:
         if truthy(config.make_contact):
             logger.info(f'Creating Contact: {row}')
+            logger.info(f"*** {row['company']} ***")
             resp = hs_api.create('contacts', data=hub_spot_contact_from_row(row))
             resp.raise_for_status()
 
