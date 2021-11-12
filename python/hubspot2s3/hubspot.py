@@ -69,6 +69,7 @@ class HubspotAPI:
 
     def create(self, entity, data):
         logger.info(f'Attempting to create a {entity}')
+        logger.info("JSON Data:", data)
         data = self._post(self.get_fqdn(entity), json=data)
         return data
 
