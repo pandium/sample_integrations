@@ -88,11 +88,11 @@ def hub_spot_company_from_row(row):
     return {
         'properties': [
             {
-                'property': 'name',
+                'name': 'name',
                 'value': row['company']
             },
             {
-                'property': 'description',
+                'name': 'description',
                 'value': row['desc']
             }
         ]
