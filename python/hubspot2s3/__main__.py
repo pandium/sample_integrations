@@ -32,16 +32,16 @@ def main():
     reader = csv.DictReader(io.TextIOWrapper(s3_file, encoding='utf-8'))
 
     for row in reader:
+        if truthy(config.make_company):
+            logger.info(f'Creating Company: {row}')
+            resp = hs_api.create('companies', data=hub_spot_company_from_row(row))
+            resp.raise_for_status()
+            
         if truthy(config.make_contact):
             logger.info(f'Creating Contact: {row}')
             resp = hs_api.create('contacts', data=hub_spot_contact_from_row(row))
             resp.raise_for_status()
 
-        if truthy(config.make_company):
-            logger.info(f'Creating Company: {row}')
-            resp = hs_api.create('companies', data=hub_spot_company_from_row(row))
-            resp.raise_for_status()
-        
     logger.info('Sync Complete')
 
 
