@@ -69,8 +69,9 @@ class HubspotAPI:
         return self._session.put(url, *args, **kwargs)
 
     def create(self, entity, data):
-        logger.info(f'Attempting to create a {entity}')
+        
         data = self._post(self.get_fqdn(entity), json=data)
+        logger.info(f'status {data}')
         return data
 
     def replace(self, entity, key, data):
