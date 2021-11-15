@@ -1,4 +1,3 @@
-from _typeshed import Self
 import logging
 import sys
 import attr
