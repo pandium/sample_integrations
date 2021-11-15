@@ -40,7 +40,6 @@ class HubspotAPI:
         v1 = {'contacts': 'contact'}
         v2 = {'companies': 'companies'}
         v1_update = {'update_contact': 'contact'}
-        v2_update = {'update_companies': 'companies'}
 
         if entity in v1:
             rtn = f'{entity}/v1/{v1[entity]}'
@@ -48,8 +47,6 @@ class HubspotAPI:
             rtn = f'contacts/v1/contact/vid/{kwargs.get("vid")}'
         elif entity in v2:
             rtn = f'{entity}/v2/{v2[entity]}'
-        elif entity in v2_update:
-            rtn = f'companies/v2/companies/{kwargs.get("cid")}'
             
         if key is not None:
             rtn += f'/{key}'
