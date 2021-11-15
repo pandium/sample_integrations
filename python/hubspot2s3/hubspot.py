@@ -36,34 +36,31 @@ class HubspotAPI:
         return s
 
     @staticmethod
-    def relative_entity_url(entity, key=None):
+    def relative_entity_url(entity, key=None, *args, **kwargs):
         v1 = {'contacts': 'contact'}
         v2 = {'companies': 'companies'}
+        v1_update = {'update_contact': 'contact'}
+        v2_update = {'update_companies': 'companies'}
+
         if entity in v1:
             rtn = f'{entity}/v1/{v1[entity]}'
-        else:
+        elif entity in v1_update:
+            rtn = f'contacts/v1/contact/vid/{kwargs.get("vid")}'
+        elif entity in v2:
             rtn = f'{entity}/v2/{v2[entity]}'
-
+        elif entity in v2_update:
+            rtn = f'companies/v2/companies/{kwargs.get("cid")}'
+            
         if key is not None:
             rtn += f'/{key}'
 
         return rtn
 
-    def update_contact(self, vid, data):
-        url = self.absolute_url(f'contacts/v1/contact/vid/{vid}')
-        resp = self._post(url, json=data)
-        logger.info(f'Update Check: {vid} {resp.status_code}')
-        if resp.status_code in (200, 204):
-            logger.info(f'Contact updated successfully')
-        else:
-            logger.error('Update contact failed')
-        return resp
-
     def absolute_url(self, relative):
         return f'https://api.hubapi.com/{relative}'
 
-    def get_fqdn(self, entity, key=None):
-        return self.absolute_url(self.relative_entity_url(entity, key))
+    def get_fqdn(self, entity, key=None, *args, **kwargs):
+        return self.absolute_url(self.relative_entity_url(entity, key, **kwargs))
 
     def _get(self, url, **kwargs):
         kwargs.setdefault('timeout', (3.05, 60))
@@ -80,6 +77,9 @@ class HubspotAPI:
     def create(self, entity, data):
         data = self._post(self.get_fqdn(entity), json=data)
         return data
+
+    def update(self, entiity, data, *args, **kwargs):
+        data = self._post(self.get_fqdn(entiity, **kwargs), json=data)
 
     def replace(self, entity, key, data):
         logger.info(f'Attempting to replace a {entity}/{key}')
