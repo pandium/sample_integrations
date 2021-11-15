@@ -36,11 +36,18 @@ def main():
             logger.info(f'Creating Company: {row}')
             resp = hs_api.create('companies', data=hub_spot_company_from_row(row))
             resp.raise_for_status()
-            
+
         if truthy(config.make_contact):
             logger.info(f'Creating Contact: {row}')
             resp = hs_api.create('contacts', data=hub_spot_contact_from_row(row))
-            resp.raise_for_status()
+            if resp.status_code == 200:
+                logger.info(f'Contact created successfully')
+            elif resp.status_code == 409:
+                logger.info(resp.body)
+                resp = hs_api.update_contact('update_contact', data=hub_spot_contact_from_row(row))
+                logger.info(f'Contact updated successfully')
+            else:
+                resp.raise_for_status()
 
     logger.info('Sync Complete')
 

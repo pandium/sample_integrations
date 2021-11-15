@@ -36,12 +36,14 @@ class HubspotAPI:
         return s
 
     @staticmethod
-    def relative_entity_url(entity, key=None):
+    def relative_entity_url(entity, key=None, data={}):
         v1 = {'contacts': 'contact'}
         v2 = {'companies': 'companies'}
-
+        v1_update = {'update_contact': 'contact'}
         if entity in v1:
             rtn = f'{entity}/v1/{v1[entity]}'
+        elif entity in v1_update:
+            rtn = f'{entity}/v1/{v1[entity]}/vid/{data["vid"]}'
         else:
             rtn = f'{entity}/v2/{v2[entity]}'
 
@@ -49,6 +51,10 @@ class HubspotAPI:
             rtn += f'/{key}'
 
         return rtn
+
+    @staticmethod
+    def update_contact():
+        ...
 
     def absolute_url(self, relative):
         return f'https://api.hubapi.com/{relative}'
@@ -69,9 +75,7 @@ class HubspotAPI:
         return self._session.put(url, *args, **kwargs)
 
     def create(self, entity, data):
-        
         data = self._post(self.get_fqdn(entity), json=data)
-        logger.info(f'status {data}')
         return data
 
     def replace(self, entity, key, data):
