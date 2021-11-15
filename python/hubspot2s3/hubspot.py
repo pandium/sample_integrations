@@ -50,7 +50,7 @@ class HubspotAPI:
 
         return rtn
 
-    def update_contact(self, data, vid):
+    def update_contact(self, vid, data):
         url = self.absolute_url(f'contacts/v1/contact/vid/{vid}')
         resp = self._post(url, json=data)
         if resp.status_code == 204:
