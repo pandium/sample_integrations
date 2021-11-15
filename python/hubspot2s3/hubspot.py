@@ -53,7 +53,7 @@ class HubspotAPI:
         url = self.absolute_url(f'contacts/v1/contact/vid/{vid}')
         resp = self._post(url, json=data)
         logger.info(f'Update Check: {vid} {resp.status_code}')
-        if resp.status_code == 204:
+        if resp.status_code in (200, 204):
             logger.info(f'Contact updated successfully')
         else:
             logger.error('Update contact failed')
