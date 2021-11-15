@@ -1,3 +1,4 @@
+from _typeshed import Self
 import logging
 import sys
 import attr
@@ -36,14 +37,11 @@ class HubspotAPI:
         return s
 
     @staticmethod
-    def relative_entity_url(entity, key=None, data={}):
+    def relative_entity_url(entity, key=None):
         v1 = {'contacts': 'contact'}
         v2 = {'companies': 'companies'}
-        v1_update = {'update_contact': 'contact'}
         if entity in v1:
             rtn = f'{entity}/v1/{v1[entity]}'
-        elif entity in v1_update:
-            rtn = f'{entity}/v1/{v1[entity]}/vid/{data["vid"]}'
         else:
             rtn = f'{entity}/v2/{v2[entity]}'
 
@@ -52,9 +50,14 @@ class HubspotAPI:
 
         return rtn
 
-    @staticmethod
-    def update_contact():
-        ...
+    def update_contact(self, data, vid):
+        url = self.absolute_url(f'contacts/v1/contact/vid/{vid}')
+        resp = self._post(url, json=data)
+        if resp.status_code == 204:
+            logger.info(f'Contact updated successfully')
+        else:
+            logger.error('Update contact failed')
+        return resp
 
     def absolute_url(self, relative):
         return f'https://api.hubapi.com/{relative}'

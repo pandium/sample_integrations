@@ -43,11 +43,10 @@ def main():
             if resp.status_code == 200:
                 logger.info(f'Contact created successfully')
             elif resp.status_code == 409:
-                logger.info(resp.json())
-                resp = hs_api.update_contact('update_contact', data=hub_spot_contact_from_row(row))
-                logger.info(f'Contact updated successfully')
-            else:
-                resp.raise_for_status()
+                resp.json()['identityProfile']['vid']
+                resp = hs_api.update_contact(data=hub_spot_contact_from_row(row))
+                
+            resp.raise_for_status()
 
     logger.info('Sync Complete')
 
