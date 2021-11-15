@@ -80,6 +80,7 @@ class HubspotAPI:
 
     def update(self, entiity, data, *args, **kwargs):
         data = self._post(self.get_fqdn(entiity, **kwargs), json=data)
+        return data
 
     def replace(self, entity, key, data):
         logger.info(f'Attempting to replace a {entity}/{key}')
