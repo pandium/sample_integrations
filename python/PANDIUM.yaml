@@ -31,9 +31,9 @@ configs:
         - label: S3 File Name
           scope: '#/properties/s3_file_name'
           type: Control
-      hintText: S3 Bucket:\ The bucket that contains the file wanting to be used.\n
+      hintText: "S3 Bucket: The bucket that contains the file wanting to be used.\n
           S3 File Name:\ The CSV file path name that conatins the data to be used.\n
-          Note:\ The file path name is the name of the file if not in a folder.
+          Note: The file path name is the name of the file if not in a folder."
     - type: Divider
     - type: Section
       label: HubSpot
@@ -44,6 +44,6 @@ configs:
         - label: Make Company?
           scope: '#/properties/make_company'
           type: Control
-      hintText: Make Contacts:\ Creates new contacts or updates existing contacts based on email.\n
-          Make Companies:\ Creates new companies. (Will create a duplicate if company already exists)
+      hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n
+          Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
