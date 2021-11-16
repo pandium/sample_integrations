@@ -32,7 +32,7 @@ configs:
           scope: '#/properties/s3_file_name'
           type: Control
     - type: Section
-      label: hubspot
+      label: HubSpot
       elements:
         - label: Make Contact?
           scope: '#/properties/make_contact'
