@@ -31,6 +31,7 @@ configs:
         - label: S3 File Name
           scope: '#/properties/s3_file_name'
           type: Control
+    - type: Divider
     - type: Section
       label: HubSpot
       elements:
