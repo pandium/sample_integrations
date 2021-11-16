@@ -22,16 +22,22 @@ configs:
     type: object
   uischema:
     elements:
-    - label: S3 Bucket Name
-      scope: '#/properties/s3_bucket_name'
-      type: Control
-    - label: S3 File Name
-      scope: '#/properties/s3_file_name'
-      type: Control
-    - label: Make Contact?
-      scope: '#/properties/make_contact'
-      type: Control
-    - label: Make Company?
-      scope: '#/properties/make_company'
-      type: Control
+    - type: Section
+      label: S3
+      elements:
+        - label: S3 Bucket Name
+          scope: '#/properties/s3_bucket_name'
+          type: Control
+        - label: S3 File Name
+          scope: '#/properties/s3_file_name'
+          type: Control
+    - type: Section
+      label: hubspot
+      elements:
+        - label: Make Contact?
+          scope: '#/properties/make_contact'
+          type: Control
+        - label: Make Company?
+          scope: '#/properties/make_company'
+          type: Control
     type: VerticalLayout
