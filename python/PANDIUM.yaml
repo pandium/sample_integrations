@@ -22,7 +22,7 @@ configs:
       note:
         type: string
         options:
-          multi: true
+          multiline: true
           rows: 3
     type: object
   uischema:
