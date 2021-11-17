@@ -19,10 +19,8 @@ configs:
         type: boolean
       make_company:
         type: boolean
-      note:
-        type: string
-      note2:
-        type: string
+#       note:
+#         type: string
         
     type: object
   uischema:
@@ -49,18 +47,12 @@ configs:
         - label: Make Company?
           scope: '#/properties/make_company'
           type: Control
-        - label: Note
-          scope: '#/properties/note'
-          type: Control
-          options:
-            multi: true
-            rows: "3"
-        - label: Note 2
-          scope: '#/properties/note2'
-          type: Control
-          options:
-            multi: false
-            rows: "1"
+#         - label: Note
+#           scope: '#/properties/note'
+#           type: Control
+#           options:
+#             multi: true
+#             rows: "3"
       hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n
           Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
