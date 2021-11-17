@@ -21,7 +21,6 @@ configs:
         type: boolean
       note:
         type: string
-        
     type: object
   uischema:
     elements:
