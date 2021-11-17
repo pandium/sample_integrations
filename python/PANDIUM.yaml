@@ -21,6 +21,9 @@ configs:
         type: boolean
       note:
         type: string
+      note2:
+        type: string
+        
     type: object
   uischema:
     elements:
@@ -52,6 +55,12 @@ configs:
           options:
             multi: true
             rows: "3"
+        - label: Note 2
+          scope: '#/properties/note2'
+          type: Control
+          options:
+            multi: false
+            rows: "1"
       hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n
           Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
