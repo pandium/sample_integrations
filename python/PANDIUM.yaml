@@ -51,8 +51,7 @@ configs:
           type: Control
           options:
             multi: true
-            id: outlined-multiline-static
-            rows: {4}
+            minRows: 3
       hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n
           Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
