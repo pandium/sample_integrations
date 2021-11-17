@@ -51,7 +51,7 @@ def main():
 
             resp.raise_for_status()
 
-    logger.info('Sync Complete')
+    logger.info('Sync Finished')
 
 
 def hub_spot_contact_from_row(row):
