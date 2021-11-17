@@ -23,6 +23,7 @@ configs:
         type: string
         options:
           multi: true
+          rows: 3
     type: object
   uischema:
     elements:
