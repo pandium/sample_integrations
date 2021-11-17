@@ -21,6 +21,8 @@ configs:
         type: boolean
       note:
         type: string
+        options:
+          multi: true
     type: object
   uischema:
     elements:
@@ -49,7 +51,6 @@ configs:
         - label: Note
           scope: '#/properties/note'
           type: Control
-          ui:widget: textarea
       hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n
           Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
