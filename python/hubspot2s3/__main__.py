@@ -19,6 +19,7 @@ def main():
     context = Context.from_env()
 
     print(f'This run is in mode: {context.run_mode}', file=sys.stderr)
+    print(config, file=sys.stderr)
 
     hs_api = HubspotAPI(config, secrets)
 
