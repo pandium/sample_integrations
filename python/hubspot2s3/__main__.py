@@ -19,6 +19,7 @@ def main():
     context = Context.from_env()
 
     print(f'This run is in mode: {context.run_mode}', file=sys.stderr)
+    print(config, file=sys.stderr)
 
     hs_api = HubspotAPI(config, secrets)
 
@@ -26,21 +27,32 @@ def main():
         access_key_id=secrets.aws_access_key_id,
         secret_access_key=secrets.aws_secret_access_key,
         bucket_name=config.s3_bucket_name,
-        path=config.s3_path
+        path=config.s3_file_name
     )
 
     reader = csv.DictReader(io.TextIOWrapper(s3_file, encoding='utf-8'))
 
     for row in reader:
-        if truthy(config.make_contact):
-            logger.info(f'Creating Contact: {row}')
-            resp = hs_api.create('contacts', data=hub_spot_contact_from_row(row))
-            resp.raise_for_status()
-
         if truthy(config.make_company):
             logger.info(f'Creating Company: {row}')
             resp = hs_api.create('companies', data=hub_spot_company_from_row(row))
             resp.raise_for_status()
+
+        if truthy(config.make_contact):
+            logger.info(f'Creating Contact: {row}')
+            resp = hs_api.create('contacts', data=hub_spot_contact_from_row(row))
+            if resp.status_code == 200:
+                logger.info(f'Contact created successfully')
+            elif resp.status_code == 409:
+                resp = hs_api.update('update_contact',data=hub_spot_contact_from_row(row), vid=resp.json()['identityProfile']['vid'])
+                if resp.status_code in (200, 204):
+                    logger.info(f'Contact updated successfully')
+                else:
+                    logger.error('Update contact failed')
+
+            resp.raise_for_status()
+
+    logger.info('Sync Finished!')
 
 
 def hub_spot_contact_from_row(row):

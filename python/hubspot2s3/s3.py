@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def s3_download(access_key_id, secret_access_key, bucket_name, path):
     logger.debug(" ----------------------------------- S3 -----------------------------------")
-    logger.info("Downloading feed.")
+    logger.info("Downloading S3 File.")
 
     session = boto3.Session(
         aws_access_key_id=access_key_id,

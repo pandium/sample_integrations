@@ -1,5 +1,5 @@
 import logging
-
+import sys
 import attr
 import requests
 
@@ -17,10 +17,17 @@ class HubspotAPI:
         querystring = {}
         headers = {}
 
-        if getattr(self.secrets, 'hubspot_hapikey'):
+        if getattr(self.secrets, 'hubspot_hapikey', False):
             querystring['hapikey'] = self.secrets.hubspot_hapikey
-        elif getattr(self.secrets, 'hubspot_access_token'):
-            headers = {'Authorization': f'Bearer {self.secrets.hubspot_access_token}'}
+        elif getattr(self.secrets, 'hubspot_oauth_access_token', False):
+            headers = {
+                "Content-Type": "application/json",
+                'Authorization': f'Bearer {self.secrets.hubspot_oauth_access_token}'
+            }
+        else:
+            logger.error("hubspot_hapikey or hubspot_oauth_access_token not found")
+            logger.error("Exiting script")
+            sys.exit(1)
 
         s = requests.Session()
         s.params = querystring
@@ -29,15 +36,18 @@ class HubspotAPI:
         return s
 
     @staticmethod
-    def relative_entity_url(entity, key=None):
+    def relative_entity_url(entity, key=None, *args, **kwargs):
         v1 = {'contacts': 'contact'}
         v2 = {'companies': 'companies'}
+        v1_update = {'update_contact': 'contact'}
 
         if entity in v1:
             rtn = f'{entity}/v1/{v1[entity]}'
-        else:
+        elif entity in v1_update:
+            rtn = f'contacts/v1/contact/vid/{kwargs.get("vid")}'
+        elif entity in v2:
             rtn = f'{entity}/v2/{v2[entity]}'
-
+            
         if key is not None:
             rtn += f'/{key}'
 
@@ -46,8 +56,8 @@ class HubspotAPI:
     def absolute_url(self, relative):
         return f'https://api.hubapi.com/{relative}'
 
-    def get_fqdn(self, entity, key=None):
-        return self.absolute_url(self.relative_entity_url(entity, key))
+    def get_fqdn(self, entity, key=None, *args, **kwargs):
+        return self.absolute_url(self.relative_entity_url(entity, key, **kwargs))
 
     def _get(self, url, **kwargs):
         kwargs.setdefault('timeout', (3.05, 60))
@@ -62,8 +72,11 @@ class HubspotAPI:
         return self._session.put(url, *args, **kwargs)
 
     def create(self, entity, data):
-        logger.info(f'Attempting to create a {entity}')
         data = self._post(self.get_fqdn(entity), json=data)
+        return data
+
+    def update(self, entiity, data, *args, **kwargs):
+        data = self._post(self.get_fqdn(entiity, **kwargs), json=data)
         return data
 
     def replace(self, entity, key, data):
