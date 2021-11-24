@@ -19,7 +19,7 @@ configs:
         type: boolean
       make_company:
         type: boolean
-      note:
+      thoughts:
         type: string
     type: object
   uischema:
@@ -46,8 +46,8 @@ configs:
         - label: Make Company?
           scope: '#/properties/make_company'
           type: Control
-        - label: Note
-          scope: '#/properties/note'
+        - label: Thoughts?
+          scope: '#/properties/thoughts'
           type: Control
           options:
             multi: true
