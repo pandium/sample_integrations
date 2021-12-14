@@ -5,7 +5,6 @@ run: ruby main.rb
 
 configs:
   schema:
-    name: node_schema
     properties:
       s3_bucket_name:
         type: string
@@ -79,5 +78,5 @@ configs:
           type: Control 
           options:
             multi: true
-          hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
+      hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
