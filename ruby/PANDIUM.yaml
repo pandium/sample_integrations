@@ -47,7 +47,7 @@ configs:
     type: object
   uischema:
     elements:
-    - type: Section
+    - type: Group
       label: S3
       elements:
         - label: S3 Bucket Name
@@ -63,7 +63,7 @@ configs:
           S3 File Name: The CSV file path name that contains the data to be used.\n
           Note: The file path name is the name of the file if not in a folder."
     - type: Divider
-    - type: Section
+    - type: Group
       label: HubSpot
       elements: 
         - label: Make Contact?
