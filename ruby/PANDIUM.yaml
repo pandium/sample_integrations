@@ -11,7 +11,6 @@ configs:
       s3_file_name:
         type: string
       s3_region:
-        type: string
         enum:
           - us-east-1
           - us-east-2
@@ -38,6 +37,7 @@ configs:
           - me-south-1
           - us-gov-east-1
           - us-gov-west-1
+        type: string
       make_contact:
         type: boolean
       make_company:
@@ -47,7 +47,7 @@ configs:
     type: object
   uischema:
     elements:
-    - type: Group
+    - type: Section
       label: S3
       elements:
         - label: S3 Bucket Name
@@ -63,7 +63,7 @@ configs:
           S3 File Name: The CSV file path name that contains the data to be used.\n
           Note: The file path name is the name of the file if not in a folder."
     - type: Divider
-    - type: Group
+    - type: Section
       label: HubSpot
       elements: 
         - label: Make Contact?
