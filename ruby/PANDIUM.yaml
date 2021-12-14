@@ -43,6 +43,8 @@ configs:
         type: boolean
       make_company:
         type: boolean
+      note:
+        type: string
     type: object
   uischema:
     elements:
@@ -60,5 +62,8 @@ configs:
         type: Control
       - label: Make Company?
         scope: '#/properties/make_company'
+        type: Control
+      - label: Note
+        scope: '#/properties/note'
         type: Control
     type: VerticalLayout
