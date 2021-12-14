@@ -60,7 +60,6 @@ configs:
           - label: Region
             type: Control
             scope: '#/properties/s3_region'
-      - type: Divider
       - type: Section
         label: HubSpot
         elements:
