@@ -3,8 +3,13 @@ base: ruby:2.6
 build: bundle update && bundle install
 run: ruby main.rb
 
+connectors:
+ - hubspot
+ - aws # S3
+
 configs:
   schema:
+    name: node_schema
     properties:
       s3_bucket_name:
         type: string
