@@ -10,6 +10,34 @@ configs:
         type: string
       s3_file_name:
         type: string
+      s3_region:
+        type: string
+        enum:
+          - us-east-1
+          - us-east-2
+          - us-west-1
+          - us-west-2
+          - af-south-1
+          - ap-east-1
+          - ap-south-1
+          - ap-northeast-1
+          - ap-northeast-2
+          - ap-northeast-3
+          - ap-southeast-1
+          - ap-southeast-2
+          - ca-central-1
+          - cn-north-1
+          - cn-northwest-1
+          - eu-central-1
+          - eu-west-1
+          - eu-west-2
+          - eu-south-1
+          - eu-west-3
+          - eu-north-1
+          - sa-east-1
+          - me-south-1
+          - us-gov-east-1
+          - us-gov-west-1
       make_contact:
         type: boolean
       make_company:
@@ -19,26 +47,35 @@ configs:
     type: object
   uischema:
     elements:
-      - type: Section
-        label: S3
-        elements:
-          - label: S3 Bucket Name
-            scope: '#/properties/s3_bucket_name'
-            type: Control
-          - label: S3 File Name
-            scope: '#/properties/s3_file_name'
-            type: Control
-      - type: Divider
-      - type: Section
-        label: HubSpot
-        elements:
-          - label: Make Contact?
-            scope: '#/properties/make_contact'
-            type: Control
-          - label: Make Company?
-            scope: '#/properties/make_company'
-            type: Control
-          - label: Note
-            scope: '#/properties/note'
-            type: Control
+    - type: Section
+      label: S3
+      elements:
+        - label: S3 Bucket Name
+          scope: '#/properties/s3_bucket_name'
+          type: Control
+        - label: S3 File Name
+          scope: '#/properties/s3_file_name'
+          type: Control
+        - label: Region
+          scope: '#/properties/s3_region'
+          type: Control
+      hintText: "S3 Bucket: The bucket that contains the file wanting to be used.\n
+          S3 File Name: The CSV file path name that contains the data to be used.\n
+          Note: The file path name is the name of the file if not in a folder."
+    - type: Divider
+    - type: Section
+      label: HubSpot
+      elements: 
+        - label: Make Contact?
+          scope: '#/properties/make_contact'
+          type: Control
+        - label: Make Company?
+          scope: '#/properties/make_company'
+          type: Control
+        - label: Note
+          scope: '#/properties/note'
+          type: Control 
+          options:
+            multi: true
+      hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
