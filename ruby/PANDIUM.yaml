@@ -5,6 +5,7 @@ run: ruby main.rb
 
 configs:
   schema:
+    name: node_schema
     properties:
       s3_bucket_name:
         type: string
