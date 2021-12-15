@@ -11,9 +11,8 @@ configs:
       s3_file_name:
         type: string
       s3_region:
-        oneOf:
-          - const: us-east-1
-            title: us-east-1
+        enum:
+          - us-east-1
         type: string
       make_contact:
         type: boolean
