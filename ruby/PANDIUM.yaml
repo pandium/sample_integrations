@@ -11,54 +11,96 @@ configs:
       s3_file_name:
         type: string
       s3_region:
-        ref: '#/definitions/s3_region'
+        oneOf:
+          - const: us-east-1
+            title: us-east-1
+          - const: us-east-2
+            title: us-east-2
+          - const: us-west-1
+            title: us-west-1
+          - const: us-west-2
+            title: us-west-2
+          - const: af-south-1
+            title: af-south-1
+          - const: ap-east-1
+            title: ap-east-1
+          - const: ap-south-1
+            title: ap-south-1
+          - const: ap-northeast-1
+            title: ap-northeast-1
+          - const: ap-northeast-2
+            title: ap-northeast-2
+          - const: ap-northeast-3
+            title: ap-northeast-3
+          - const: ap-southeast-1
+            title: ap-southeast-1
+          - const: ap-southeast-2
+            title: ap-southeast-2
+          - const: ca-central-1
+            title: ca-central-1
+          - const: cn-north-1
+            title: cn-north-1
+          - const: cn-northwest-1
+            title: cn-northwest-1
+          - const: eu-central-1
+            title: eu-central-1
+          - const: eu-west-1
+            title: eu-west-1
+          - const: eu-west-2
+            title: eu-west-2
+          - const: eu-south-1
+            title: eu-south-1
+          - const: eu-west-3
+            title: eu-west-3
+          - const: eu-north-1
+            title: eu-north-1
+          - const: sa-east-1
+            title: sa-east-1
+          - const: me-south-1
+            title: me-south-1
+          - const: us-gov-east-1
+            title: us-gov-east-1
+          - const: us-gov-west-1
+            title: us-gov-west-1
         type: string
-        enum:
-          - us-east-1
-          - us-east-2
-          - us-west-1
-          - us-west-2
-          - af-south-1
-          - ap-east-1
-          - ap-south-1
-          - ap-northeast-1
-          - ap-northeast-2
-          - ap-northeast-3
-          - ap-southeast-1
-          - ap-southeast-2
-          - ca-central-1
-          - cn-north-1
-          - cn-northwest-1
-          - eu-central-1
-          - eu-west-1
-          - eu-west-2
-          - eu-south-1
-          - eu-west-3
-          - eu-north-1
-          - sa-east-1
-          - me-south-1
-          - us-gov-east-1
-          - us-gov-west-1
       make_contact:
         type: boolean
       make_company:
         type: boolean
+      note:
+        type: string
     type: object
   uischema:
     elements:
-      - label: S3 Bucket Name
-        scope: '#/properties/s3_bucket_name'
-        type: Control
-      - label: S3 File Name
-        scope: '#/properties/s3_file_name'
-        type: Control
-      - label: Region
-        type: Control
-        scope: '#/properties/s3_region'
-      - label: Make Contact?
-        scope: '#/properties/make_contact'
-        type: Control
-      - label: Make Company?
-        scope: '#/properties/make_company'
-        type: Control
+    - type: Section
+      label: S3
+      elements:
+        - label: S3 Bucket Name
+          scope: '#/properties/s3_bucket_name'
+          type: Control
+        - label: S3 File Name
+          scope: '#/properties/s3_file_name'
+          type: Control
+        - label: Region
+          scope: '#/properties/s3_region'
+          type: Control
+      hintText: "S3 Bucket: The bucket that contains the file wanting to be used.\n
+          S3 File Name: The CSV file path name that contains the data to be used.\n
+          Note: The file path name is the name of the file if not in a folder."
+    - type: Divider
+    - type: Section
+      label: HubSpot
+      elements: 
+        - label: Make Contact?
+          scope: '#/properties/make_contact'
+          type: Control
+        - label: Make Company?
+          scope: '#/properties/make_company'
+          type: Control
+        - label: Note
+          scope: '#/properties/note'
+          type: Control 
+          options:
+            multi: true
+      hintText: "Make Contacts: Creates new contacts or updates existing contacts based on email.\n Make Companies: Creates new companies. (Will create a duplicate if company already exists)"
     type: VerticalLayout
