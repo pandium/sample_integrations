@@ -22,4 +22,4 @@ The necessary configs and connectors should be specified in a PANDIUM.yaml. (See
 
 ## Context
 
-Pandium also provides one more class of environment variables that we call Context. The Context allows for you to account for things that happened in previous runs in your integrations logic. A canonical example would be syncing only records since the last successful run. Context values are injected into the environment with a prefix of `PAN_CTX_`.
+Pandium also provides one more class of environment variables that we call Context. The Context allows for you to account for things that happened in previous runs in your integrations logic. A canonical example would be syncing only records since the last successful run. Context values are injected into the environment with a prefix of `PAN_CTX_`..
