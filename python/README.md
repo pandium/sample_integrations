@@ -38,5 +38,5 @@ It expects the following environment variables:
 0. Install dependencies: `pipenv install --dev`
 
 ## To run locally
-`pipenv run python -m hubspot2s3 # (this auto loads your .env file)`
+`pipenv run python -m hubspot2s3 # (this auto loads your .env file)`.
 
