@@ -40,7 +40,7 @@ def main():
         with open(triggers[0]['payload']['file']) as f:
             webhook_payload = json.loads(f.read())
 
-        payload = {'customer': {'email': webhook_payload['CustomerEmail']},
+        payload = {'customer': {'emailAddress': webhook_payload['CustomerEmail']},
                    'content':
                        {
                            'type': 'CUSTOMER_ACTIVITY',
