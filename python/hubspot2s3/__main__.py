@@ -39,24 +39,24 @@ def main():
     if triggers[0]['source'] == 'webhook':
         with open(triggers[0]['payload']['file']) as f:
             webhook_payload = json.loads(f.read())
+            print(webhook_payload)
 
-        payload = {'customer': {'emailAddress': webhook_payload['CustomerEmail']},
-                   'content':
-                       {
-                           'type': 'CUSTOMER_ACTIVITY',
-                           'activityType': 'SURVEY',
-                           'title': f'CSAT Score: {webhook_payload["ResponseText"]}',
-                           'body': f'CSAT Feedback: {webhook_payload["ResponseDescription"]}'
-                        }
-                   }
-        resp = requests.post('https://partner-dev-pandium.us-uat.gladly.qa/api/v1/conversation-items',
-                             json=payload, auth=HTTPBasicAuth(secrets.gladly_user_name, secrets.gladly_api_token))
-
-        print(resp)
-        print(resp.text)
-        print(resp.content)
-
-
+        # payload = {'customer': {'emailAddress': webhook_payload['CustomerEmail']},
+        #            'content':
+        #                {
+        #                    'type': 'CUSTOMER_ACTIVITY',
+        #                    'activityType': 'SURVEY',
+        #                    'title': f'CSAT Score: {webhook_payload["ResponseText"]}',
+        #                    'body': f'CSAT Feedback: {webhook_payload["ResponseDescription"]}'
+        #                 }
+        #            }
+        # resp = requests.post('https://partner-dev-pandium.us-uat.gladly.qa/api/v1/conversation-items',
+        #                      json=payload, auth=HTTPBasicAuth(secrets.gladly_user_name, secrets.gladly_api_token))
+        #
+        # print(resp)
+        # print(resp.text)
+        # print(resp.content)
+        #
     logger.info('Sync Finished!')
 
 
