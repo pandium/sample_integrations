@@ -1,5 +1,5 @@
 version: 0.4
-base: python:3.7 # Node, Ruby, PHP, Java, GO
+base: python:3.10 # Node, Ruby, PHP, Java, GO
 build: pipenv install # for python Pipfile or requirements
 run: pipenv run python -m hubspot2s3 # Only certain invocations acceptable depending on base
 
