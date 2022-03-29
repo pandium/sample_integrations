@@ -27,11 +27,30 @@ def main():
 
     print(triggers)
 
+
+    #{"AgentId":"AEXiE4GISu2EdqjGkm9inA",
+    # "CustomerEmail":"carina.brewer@gladly.com",
+    # "CustomerFirstName":"Carina","CustomerLastName":"Brewer","ResponseDescription":"Bina is the Best!!",
+    # "ResponseId":"R_2qklge4YV2gxeDh",
+    # "ResponseLink":"https://gladlydev.ca1.qualtrics.com/apps/single-response-reports/reports/B%2EjsS0SciVrxhLQxUqDOiwrnuQm69r6dCionp7Apk4rWhkNpoJidhwdJVWK0OjpIAWtIqNiiriJS7rt-gZ55Rw0GIAIIAdlnwUiLLVrtDtZYrhtOPHcRQl9fVUppTXsQO1dqrszySOHrvJFPH8Gf9itnE3F1dLImgzFGALSKzxgxPcXQjZ2RY5yI-brLHpdZ52wpAU9Sw7kKHNxPfbiDaeY0PhPE7UByapb0MulxzbaI24SOFGFkxAJw1tDDqgwWRDguj68ZERDzQ0zqwJQGacxfv%2EJ86zBmAI%2EfpxTHdU4",
+    # "ResponseText":"10","Status":"normal"}
+
     if triggers[0]['source'] == 'webhook':
         with open(triggers[0]['payload']['file']) as f:
-            print(f.read())
+            webhook_payload = json.loads(f.read())
 
+        payload = {'customer': {'email': webhook_payload['CustomerEmail']},
+                   'content':
+                       {
+                           'type': 'CUSTOMER_ACTIVITY',
+                           'activityType': 'SURVEY',
+                           'title': f'CSAT Score: {webhook_payload["ResponseText"]}',
+                           'body': f'CSAT Feedback: {webhook_payload["ResponseDescription"]}'
+                        }
+                   }
+        resp = requests.post('https://partner-dev-pandium.us-uat.gladly.qa/api/v1/conversation-items', json=payload)
 
+        print(resp)
 
 
     logger.info('Sync Finished!')
