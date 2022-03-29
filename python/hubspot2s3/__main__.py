@@ -1,6 +1,6 @@
 import sys
 import logging
-
+import json
 
 from .lib import Config, Secrets, Context, truthy
 
@@ -20,6 +20,12 @@ def main():
 
     print(f'This run is in mode: {context.run_mode}', file=sys.stderr)
     print(config, file=sys.stderr)
+
+    triggers = json.dumps(context.run_triggers)
+
+    if triggers[0]['source'] == 'webhook':
+        with open(triggers[0]['payload']['file']) as f:
+            print(f.read())
 
     logger.info('Sync Finished!')
 
