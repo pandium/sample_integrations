@@ -53,6 +53,8 @@ def main():
                              json=payload, auth=HTTPBasicAuth(secrets.gladly_user_name, secrets.gladly_api_token))
 
         print(resp)
+        print(resp.text)
+        print(resp.content)
 
 
     logger.info('Sync Finished!')
