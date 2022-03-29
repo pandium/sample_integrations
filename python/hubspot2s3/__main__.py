@@ -2,6 +2,8 @@ import sys
 import logging
 import json
 
+import requests
+
 from .lib import Config, Secrets, Context, truthy
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - '
@@ -23,9 +25,14 @@ def main():
 
     triggers = json.loads(context.run_triggers)
 
+    print(triggers)
+
     if triggers[0]['source'] == 'webhook':
         with open(triggers[0]['payload']['file']) as f:
             print(f.read())
+
+
+
 
     logger.info('Sync Finished!')
 
