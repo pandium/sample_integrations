@@ -3,6 +3,7 @@ import logging
 import json
 
 import requests
+from requests.auth import HTTPBasicAuth
 
 from .lib import Config, Secrets, Context, truthy
 
@@ -48,7 +49,8 @@ def main():
                            'body': f'CSAT Feedback: {webhook_payload["ResponseDescription"]}'
                         }
                    }
-        resp = requests.post('https://partner-dev-pandium.us-uat.gladly.qa/api/v1/conversation-items', json=payload)
+        resp = requests.post('https://partner-dev-pandium.us-uat.gladly.qa/api/v1/conversation-items',
+                             json=payload, auth=HTTPBasicAuth(secrets.gladly_user_name, secrets.gladly_api_token))
 
         print(resp)
 
