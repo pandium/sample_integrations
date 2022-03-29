@@ -41,6 +41,7 @@ def main():
             webhook_payload = json.loads(f.read())
             print(webhook_payload)
 
+
         # payload = {'customer': {'emailAddress': webhook_payload['CustomerEmail']},
         #            'content':
         #                {
