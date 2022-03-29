@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 coloredlogs = "*"
-boto3 = "*"
 requests_oauthlib = "*"
 requests = "*"
 attrs = "*"
