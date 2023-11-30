@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
+import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { Pokemon, PokemonType, PokemonTypeSearchResult } from "./models";
 export default class Client {
   _axiosInstance: AxiosInstance;
