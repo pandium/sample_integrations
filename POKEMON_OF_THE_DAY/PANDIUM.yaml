@@ -1,5 +1,5 @@
 version: 0.4
-base: node:16.14.2
+base: node:20.9.0
 build: npm install --production && npm i --save-dev @types/node && npm run build
 run: node .
 configs:

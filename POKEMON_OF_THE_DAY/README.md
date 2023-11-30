@@ -1,4 +1,4 @@
-# Pokémon of the Day
+# Pokémon Of The Day
 
 
 ## Intro
@@ -6,11 +6,12 @@
 Pokémon Of The Day is a simple integration built to be run on Pandium.  This is the result of Pandium's Pokémon of the Day tutorial.
 
 
-## Integration Functionality
+## Integration Features:
 
-- Allow the user to choose which type of Pokémon they prefer to get a message about.
-- Read the different types of Pokémon available from the pokéAPI to dynamically populate the options for that config.  This will ensure the list is kept up to date even if a new kind of Pokémon is added.
-- When the integration is run it will fetch a Pokémon of the type selected by the user in their connection settings.  Then it will send a Slack message about that Pokémon.  The integration will not send a message about the same Pokémon twice.
+- On a normal run it will identify & fetch the Pokémon of the day and then send a Slack message about it. 
+- The user can choose which type of Pokémon they would like to get messages about: It will read the different types of Pokémon available from the PokéAPI to dynamically populate the options for that config.  This will ensure the list is kept up to date even if a new kind of Pokémon is added.
+- The user can choose who will receive the Slack Message about the Pokémon of the day:  It will read the different users available from the Slack workspace to dynamically populate the options for that config.  
+- The integration will not send a message about the same Pokémon twice.
 
 ## Next Steps in learning to write Pandium integrations
 
