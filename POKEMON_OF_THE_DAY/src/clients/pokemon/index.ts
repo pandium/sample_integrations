@@ -14,10 +14,10 @@ export default class Client {
   getTypes = async () => this.getResource("type");
 
   async getResource(resource: string, id?: number | string): Promise<unknown> {
-    const limit = 10;
+    const limit = 50;
     const axiosConfig = {
       params: {
-        limit: 50,
+        limit: limit,
       },
     } as AxiosRequestConfig;
 
@@ -27,7 +27,9 @@ export default class Client {
     do {
       try {
         console.error(
-          `Fetching ${offset} - ${offset + limit} of ${resource} from PokéAPI`
+          `Fetching ${offset} - ${
+            offset + limit
+          } of ${resource} records from PokéAPI`
         );
         const { data } = await this._axiosInstance.get(
           id ? `${resource}/${id}` : resource,
@@ -36,7 +38,6 @@ export default class Client {
             params: {
               ...axiosConfig.params,
               offset: offset,
-              limit: limit,
             },
           }
         );
