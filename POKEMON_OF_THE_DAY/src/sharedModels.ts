@@ -1,4 +1,4 @@
 export interface OneOfOption {
-    const: string
-    title: string
+  const: string;
+  title: string;
 }
