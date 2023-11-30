@@ -1,7 +1,6 @@
 import { WebClient } from "@slack/web-api";
 import PokeClient from "../clients/pokemon";
 import { OneOfOption } from "../sharedModels";
-import { PokemonTypeSearchResult } from "../clients/pokemon/models";
 
 export const initSync = async (
   pokeClient: PokeClient,
@@ -12,9 +11,7 @@ export const initSync = async (
 
   try {
     const types = await pokeClient.getTypes();
-    pokemonTypes = (types as PokemonTypeSearchResult[]).map(
-      (type) => type.name
-    );
+    pokemonTypes = types.map((type) => type.name);
   } catch (error) {
     console.error(error);
   }

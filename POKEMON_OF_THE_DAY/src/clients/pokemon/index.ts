@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig } from "axios";
-
+import { Pokemon, PokemonType, PokemonTypeSearchResult } from "./models";
 export default class Client {
   _axiosInstance: AxiosInstance;
   constructor() {
@@ -9,9 +9,11 @@ export default class Client {
   }
 
   getPokemon = async (pokemonId: string) =>
-    this.getResource("pokemon", pokemonId);
-  getType = async (typeName: string) => this.getResource("type", typeName);
-  getTypes = async () => this.getResource("type");
+    this.getResource("pokemon", pokemonId) as Promise<Pokemon>;
+  getType = async (typeName: string) =>
+    this.getResource("type", typeName) as Promise<PokemonType>;
+  getTypes = async () =>
+    this.getResource("type") as Promise<PokemonTypeSearchResult[]>;
 
   async getResource(resource: string, id?: number | string): Promise<unknown> {
     const limit = 50;

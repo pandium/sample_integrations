@@ -1,7 +1,6 @@
 import PokeClient from "../clients/pokemon";
 import { WebClient } from "@slack/web-api";
 import { Config, Context } from "../lib";
-import { PokemonType, Pokemon } from "../clients/pokemon/models";
 import { pokemonToSlackMessage } from "../clients/pokemon/transformations";
 
 export const pokemonSync = async (
@@ -13,9 +12,8 @@ export const pokemonSync = async (
   console.error("------------------------POKEMON SYNC------------------------");
 
   // Fetch the pokemon of the type selected by the user in tenant settings.
-  const pokemonType = (await pokeClient.getType(
-    config.pokemon_type
-  )) as PokemonType;
+  const pokemonType = await pokeClient.getType(config.pokemon_type);
+
   const pokemonOptions = pokemonType.pokemon;
 
   // Access the previous pokemon of the day from context
@@ -35,9 +33,7 @@ export const pokemonSync = async (
   }
   if (!nextPokemonId) return { last_pokemon_id: lastPokemonId };
 
-  const pokemonOfTheDay = (await pokeClient.getPokemon(
-    nextPokemonId
-  )) as Pokemon;
+  const pokemonOfTheDay = await pokeClient.getPokemon(nextPokemonId);
 
   const slackMessage = pokemonToSlackMessage(
     pokemonOfTheDay,
