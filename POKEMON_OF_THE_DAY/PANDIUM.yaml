@@ -1,0 +1,41 @@
+version: 0.4
+base: node:16.14.2
+build: npm install --production && npm i --save-dev @types/node && npm run build
+run: node .
+configs:
+  schema:
+    properties:
+      pokemon_type:
+        type: string
+        $ref: '#/definitions/pokemon_types'
+      slack_user:
+        type: string
+        $ref: '#/definitions/slack_users'
+    required:
+      - pokemon_type
+      - slack_user
+    definitions:
+      slack_users:
+          type: number
+          oneOf:
+              -   title: Placeholder
+                  const: placeholder
+      pokemon_types:
+          enum:
+              -  placeholder  
+  uischema:
+    elements:
+    - type: Section
+      label: Configure Pokémon of the Day
+      hintText: Select which type of Pokémon you would like to learn about, and the Slack User who will receive the Pokémon of the day message.
+      elements:
+
+      - label: Pokémon Type
+        scope: '#/properties/pokemon_type'
+        type: Control
+
+      - label: Slack User
+        scope: '#/properties/slack_user'
+        type: Control
+
+    type: VerticalLayout
