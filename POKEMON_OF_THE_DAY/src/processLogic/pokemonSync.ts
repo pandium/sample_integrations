@@ -3,6 +3,11 @@ import { WebClient } from "@slack/web-api";
 import { Config, Context } from "../lib";
 import { pokemonToSlackMessage } from "../clients/pokemon/transformations";
 
+/* 
+This flow identifies the Pokémon of the day and sends a Slack message about
+it to the user selected in the config.
+*/
+
 export const pokemonSync = async (
   pokeClient: PokeClient,
   slackClient: WebClient,

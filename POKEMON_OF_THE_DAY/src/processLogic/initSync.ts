@@ -2,6 +2,12 @@ import { WebClient } from "@slack/web-api";
 import PokeClient from "../clients/pokemon";
 import { OneOfOption } from "../sharedModels";
 
+/* 
+This flow fetches slack_users and pokemon_types and prints them to the standard out. 
+This allows the Pandium platform to use them to populate options for the pokemon_type 
+and slack_user dynamic configs.
+*/
+
 export const initSync = async (
   pokeClient: PokeClient,
   slackClient: WebClient

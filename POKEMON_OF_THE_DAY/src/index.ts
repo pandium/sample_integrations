@@ -1,5 +1,5 @@
-// To get Access to the .env where Pandium secrets, configs, and context can be accessed.
 import * as dotenv from "dotenv";
+// This gives access to process.env which is where Pandium secrets, configs, and context are kept.
 dotenv.config();
 import { WebClient } from "@slack/web-api";
 import PokeClient from "./clients/pokemon/index";
@@ -21,15 +21,10 @@ const run = async () => {
 
   const pokeClient = new PokeClient();
   const slackClient = new WebClient(secrets.slack_token);
-  // let standardOut: StandardOut = {}
-  if (context.last_successful_run_std_out) {
-    const lastStdOut = JSON.parse(context.last_successful_run_std_out);
-    // standardOut = {...standardOut, ...lastStdOut }
-  }
+
   if (context.run_mode === "init") {
     const initStdOut = await initSync(pokeClient, slackClient);
     console.log(JSON.stringify(initStdOut));
-    // standardOut = {...standardOut, ...initStdOut }
   } else {
     const normalStdOut = await pokemonSync(
       pokeClient,
@@ -38,11 +33,7 @@ const run = async () => {
       context
     );
     console.log(JSON.stringify(normalStdOut));
-
-    // standardOut = {...standardOut, ...normalStandardOut }
   }
-
-  // console.log(JSON.stringify( standardOut ))
 };
 
 run().then(

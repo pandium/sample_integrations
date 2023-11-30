@@ -57,7 +57,7 @@ export default class Client {
             id ? id : ""
           } from PokéAPI.`
         );
-        console.log(error);
+        console.error(error);
         return undefined;
       }
     } while (true);
