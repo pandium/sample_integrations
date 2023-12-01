@@ -1,0 +1,21 @@
+{
+  "name": "pokemon-of-the-day",
+  "version": "1.0.0",
+  "main": "lib/index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@slack/web-api": "^6.10.0",
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "typescript": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.4",
+    "@types/sax": "^1.2.4",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
+  }
+}
