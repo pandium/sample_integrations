@@ -1,6 +1,6 @@
 import { WebClient } from "@slack/web-api";
 import Pokedex from "pokedex-promise-v2";
-import { OneOfOption } from "../sharedModels.js";
+import { OneOfOption } from "../models.js";
 
 /* 
 This flow fetches slack_users and pokemon_types and prints them to the standard out. 

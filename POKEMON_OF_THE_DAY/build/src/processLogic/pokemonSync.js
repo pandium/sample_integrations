@@ -34,7 +34,7 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-import { pokemonToSlackMessage } from "../transformation.js";
+import { pokemonToSlackMessage } from "../transformations.js";
 /*
 This flow identifies the Pokémon of the day and sends a Slack message about
 it to the user selected in the config.
