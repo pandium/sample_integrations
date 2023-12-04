@@ -1,7 +1,7 @@
 {
   "name": "pokemon-of-the-day",
   "version": "1.0.0",
-  "main": "lib/index.js",
+  "main": "build/src",
   "scripts": {
     "start": "node build/src/",
     "build": "tsc"
