@@ -1,7 +1,7 @@
-import PokeClient from "../clients/pokemon";
+import Pokedex from "pokedex-promise-v2";
 import { WebClient } from "@slack/web-api";
-import { Config, Context } from "../lib";
-import { pokemonToSlackMessage } from "../clients/pokemon/transformations";
+import { Config, Context } from "../lib.js";
+import { pokemonToSlackMessage } from "../transformation.js";
 
 /* 
 This flow identifies the Pokémon of the day and sends a Slack message about
@@ -9,7 +9,7 @@ it to the user selected in the config.
 */
 
 export const pokemonSync = async (
-  pokeClient: PokeClient,
+  pokeClient: Pokedex,
   slackClient: WebClient,
   config: Config,
   context: Context
@@ -17,7 +17,7 @@ export const pokemonSync = async (
   console.error("------------------------POKEMON SYNC------------------------");
 
   // Fetch the pokemon of the type selected by the user in tenant settings.
-  const pokemonType = await pokeClient.getType(config.pokemon_type);
+  const pokemonType = await pokeClient.getTypeByName(config.pokemon_type);
 
   const pokemonOptions = pokemonType.pokemon;
 
@@ -38,7 +38,7 @@ export const pokemonSync = async (
   }
   if (!nextPokemonId) return { last_pokemon_id: lastPokemonId };
 
-  const pokemonOfTheDay = await pokeClient.getPokemon(nextPokemonId);
+  const pokemonOfTheDay = await pokeClient.getPokemonByName(nextPokemonId);
 
   const slackMessage = pokemonToSlackMessage(
     pokemonOfTheDay,

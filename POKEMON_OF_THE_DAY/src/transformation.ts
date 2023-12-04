@@ -1,4 +1,4 @@
-import { Pokemon } from "./models";
+import { Pokemon } from "pokedex-promise-v2";
 import { ChatPostMessageArguments } from "@slack/web-api";
 
 export const pokemonToSlackMessage = (

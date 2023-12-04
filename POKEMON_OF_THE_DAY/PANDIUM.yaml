@@ -1,6 +1,6 @@
 version: 0.4
 base: node:20.9.0
-build: npm install --production && npm i --save-dev @types/node && npm run build
+build: npm install --production && npm i --save-dev @types/node && npm run compile
 run: node .
 configs:
   schema:

@@ -1,12 +1,20 @@
 {
     "compilerOptions": {
-        "target": "ES2020",
-        "module": "commonjs",
-        "declaration": true,
-        "outDir": "./lib",
-        "strict": true,
+        "rootDir": ".",
+        "outDir": "build",
+        "target": "es5",
+        "module": "es2020",
+        "moduleResolution": "node",
         "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true
-    },
-    "include": ["src/**/*"]
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "noImplicitAny": true,
+        "skipLibCheck": true
+      },
+    "include": ["src/**/*"],
+    "ts-node": {
+        "transpileOnly": true,
+        "files": true,
+        "experimentalResolver": true
+      }
 }

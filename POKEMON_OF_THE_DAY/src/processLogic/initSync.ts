@@ -1,6 +1,6 @@
 import { WebClient } from "@slack/web-api";
-import PokeClient from "../clients/pokemon";
-import { OneOfOption } from "../sharedModels";
+import Pokedex from "pokedex-promise-v2";
+import { OneOfOption } from "../sharedModels.js";
 
 /* 
 This flow fetches slack_users and pokemon_types and prints them to the standard out. 
@@ -8,15 +8,12 @@ This allows the Pandium platform to use them to populate options for the pokemon
 and slack_user dynamic configs.
 */
 
-export const initSync = async (
-  pokeClient: PokeClient,
-  slackClient: WebClient
-) => {
+export const initSync = async (pokeClient: Pokedex, slackClient: WebClient) => {
   console.error("------------------------INIT SYNC------------------------");
   let pokemonTypes: string[] = [];
 
   try {
-    const types = await pokeClient.getTypes();
+    const { results: types } = await pokeClient.getTypesList();
     pokemonTypes = types.map((type) => type.name);
   } catch (error) {
     console.error(error);
