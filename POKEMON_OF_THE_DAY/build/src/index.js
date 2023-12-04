@@ -40,10 +40,8 @@ dotenv.config();
 import { WebClient } from "@slack/web-api";
 import Pokedex from "pokedex-promise-v2";
 import { Config, Secret, Context } from "./lib.js";
-import { initSync } from "./processLogic/initSync.js";
-import { pokemonSync } from "./processLogic/pokemonSync.js";
 var run = function () { return __awaiter(void 0, void 0, void 0, function () {
-    var context, secrets, config, pokeClient, slackClient, initStdOut, normalStdOut;
+    var context, secrets, config, pokeClient, slackClient, tyranitar;
     return __generator(this, function (_a) {
         switch (_a.label) {
             case 0:
@@ -57,18 +55,11 @@ var run = function () { return __awaiter(void 0, void 0, void 0, function () {
                 console.error(context);
                 pokeClient = new Pokedex();
                 slackClient = new WebClient(secrets.slack_token);
-                if (!(context.run_mode === "init")) return [3 /*break*/, 2];
-                return [4 /*yield*/, initSync(pokeClient, slackClient)];
+                return [4 /*yield*/, pokeClient.getPokemonByName("tyranitar")];
             case 1:
-                initStdOut = _a.sent();
-                console.log(JSON.stringify(initStdOut));
-                return [3 /*break*/, 4];
-            case 2: return [4 /*yield*/, pokemonSync(pokeClient, slackClient, config, context)];
-            case 3:
-                normalStdOut = _a.sent();
-                console.log(JSON.stringify(normalStdOut));
-                _a.label = 4;
-            case 4: return [2 /*return*/];
+                tyranitar = _a.sent();
+                console.log(tyranitar);
+                return [2 /*return*/];
         }
     });
 }); };

@@ -1,7 +1,7 @@
 import Pokedex from "pokedex-promise-v2";
 import { WebClient } from "@slack/web-api";
 import { Config, Context } from "../lib.js";
-import { pokemonToSlackMessage } from "../transformation.js";
+import { pokemonToSlackMessage } from "../transformations.js";
 
 /* 
 This flow identifies the Pokémon of the day and sends a Slack message about
