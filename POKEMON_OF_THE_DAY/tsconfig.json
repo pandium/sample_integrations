@@ -1,20 +1,20 @@
 {
-    "compilerOptions": {
-        "rootDir": ".",
-        "outDir": "build",
-        "target": "es5",
-        "module": "es2020",
-        "moduleResolution": "node",
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "strict": true,
-        "noImplicitAny": true,
-        "skipLibCheck": true
-      },
-    "include": ["src/**/*"],
-    "ts-node": {
-        "transpileOnly": true,
-        "files": true,
-        "experimentalResolver": true
-      }
+  "compilerOptions": {
+      "rootDir": ".",
+      "outDir": "build",
+      "target": "es5",
+      "module": "es2020",
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "strict": true,
+      "noImplicitAny": true,
+      "skipLibCheck": true
+  },
+  "include": ["src/**/*"],
+  "ts-node": {
+      "transpileOnly": true,
+      "files": true,
+      "experimentalResolver": true
+  }
 }

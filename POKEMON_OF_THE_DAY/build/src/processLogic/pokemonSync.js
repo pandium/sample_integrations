@@ -37,41 +37,38 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 import { pokemonToSlackMessage } from "../transformations.js";
 /*
 This flow identifies the Pokémon of the day and sends a Slack message about
-it to the user selected in the config.
+it to the users in slackMemberIds.
 */
-export var pokemonSync = function (pokeClient, slackClient, config, context) { return __awaiter(void 0, void 0, void 0, function () {
-    var pokemonType, pokemonOptions, lastPokemonId, lastStdOut, nextPokemonId, _i, pokemonOptions_1, pokemon, pokemonId, pokemonOfTheDay, slackMessage;
+export var pokemonSync = function (pokeClient, slackClient, context) { return __awaiter(void 0, void 0, void 0, function () {
+    var lastPokemonId, lastStdOut, nextPokemonId, pokemonOfTheDay, slackMemberIds, _i, slackMemberIds_1, slackID, slackMessage;
     return __generator(this, function (_a) {
         switch (_a.label) {
             case 0:
                 console.error("------------------------POKEMON SYNC------------------------");
-                return [4 /*yield*/, pokeClient.getTypeByName(config.pokemon_type)];
-            case 1:
-                pokemonType = _a.sent();
-                pokemonOptions = pokemonType.pokemon;
                 lastPokemonId = 0;
                 if (context.last_successful_run_std_out) {
                     lastStdOut = JSON.parse(context.last_successful_run_std_out);
                     lastPokemonId = Number(lastStdOut.last_pokemon_id) || 0;
                 }
-                for (_i = 0, pokemonOptions_1 = pokemonOptions; _i < pokemonOptions_1.length; _i++) {
-                    pokemon = pokemonOptions_1[_i];
-                    pokemonId = Number(pokemon.pokemon.url.split("/").slice(-2, -1)[0]);
-                    if (pokemonId <= lastPokemonId)
-                        continue;
-                    nextPokemonId = String(pokemonId);
-                    break;
-                }
-                if (!nextPokemonId)
-                    return [2 /*return*/, { last_pokemon_id: lastPokemonId }];
+                nextPokemonId = lastPokemonId + 1;
                 return [4 /*yield*/, pokeClient.getPokemonByName(nextPokemonId)];
-            case 2:
+            case 1:
                 pokemonOfTheDay = _a.sent();
-                slackMessage = pokemonToSlackMessage(pokemonOfTheDay, config.slack_user);
+                slackMemberIds = ["<YOUR-SLACK-MEMBER-ID>"];
+                _i = 0, slackMemberIds_1 = slackMemberIds;
+                _a.label = 2;
+            case 2:
+                if (!(_i < slackMemberIds_1.length)) return [3 /*break*/, 5];
+                slackID = slackMemberIds_1[_i];
+                slackMessage = pokemonToSlackMessage(pokemonOfTheDay, slackID);
                 return [4 /*yield*/, slackClient.chat.postMessage(slackMessage)];
             case 3:
                 _a.sent();
-                return [2 /*return*/, { last_pokemon_id: nextPokemonId }];
+                _a.label = 4;
+            case 4:
+                _i++;
+                return [3 /*break*/, 2];
+            case 5: return [2 /*return*/, { last_pokemon_id: nextPokemonId }];
         }
     });
 }); };
