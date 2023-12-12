@@ -5,6 +5,7 @@ import { WebClient } from "@slack/web-api";
 import Pokedex from "pokedex-promise-v2";
 import { Config, Secret, Context } from "./lib.js";
 import { pokemonSync } from "./processLogic/pokemonSync.js";
+import { initSync } from "./processLogic/initSync.js";
 
 const run = async () => {
   const context = new Context();
@@ -25,8 +26,16 @@ const run = async () => {
   const slackClient = new WebClient(secrets.slack_oauth_access_token);
 
   if (context.run_mode === "normal") {
-    const standardOut = await pokemonSync(pokeClient, slackClient, context);
+    const standardOut = await pokemonSync(
+      pokeClient,
+      slackClient,
+      context,
+      config
+    );
     console.log(JSON.stringify(standardOut));
+  } else {
+    const initStandardOut = await initSync(pokeClient, slackClient);
+    console.log(JSON.stringify(initStandardOut));
   }
 };
 
