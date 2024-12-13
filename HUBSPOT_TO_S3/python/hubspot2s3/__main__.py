@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    print("Annnnnndrea")
     config = Config.from_env()
     secrets = Secrets.from_env()
     context = Context.from_env()
