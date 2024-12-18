@@ -1,0 +1,33 @@
+version: 0.4
+base: node:20.9.0
+build: npm install --production && npm i --save-dev @types/node && npm run build
+run: node .
+configs:
+  schema:
+    properties:
+      free_text_config_1:
+        type: string
+      free_text_config_2:
+        type: string
+      boolean_1:
+        type: boolean
+        default: true
+      boolean_2:
+        type: boolean
+    type: object
+  uischema:
+    elements:
+    - label: Free Text Field 1
+      scope: '#/properties/free_text_config_1'
+      type: Control
+    - label: Free Text Field 2
+      scope: '#/properties/free_text_config_2'
+      type: Control
+    - label: Boolean 1
+      scope: '#/properties/boolean_1'
+      type: Control
+      admin: true
+    - label: Boolean 2
+      scope: '#/properties/boolean_2'
+      type: Control
+    type: VerticalLayout
