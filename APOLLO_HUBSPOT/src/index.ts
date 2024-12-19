@@ -75,6 +75,9 @@ const run = async () => {
     const thisContext = new Context()
     const secrets = new Secret()
     const config = new Config()
+    if (thisContext['run_mode'] ==='init') {
+        process.exit(0)
+    }
 
     logger.info(`This run is in mode: ${thisContext['run_mode']}`)
 
