@@ -86,12 +86,12 @@ const run = async () => {
 
     try {
         const hsClient = new HubSpot(
-            secrets['hubspot-basic_api_key'],
+            secrets['hubspot_basic_api_key'],
             metrics,
             nextContext
         )
         const apClient = new Apollo(
-            secrets['apollo-io_api_key'],
+            secrets['apollo_io_api_key'],
             metrics,
             nextContext
         )
@@ -120,11 +120,11 @@ const run = async () => {
 run().then(
     // When the promise is resolved no further action needed.
     () => {
-        process.exit(0)
+        process.exitCode= 0
     },
     // When the promise is rejected a nonzero exit code will fail the run.
     (error) => {
         logger.error(`Encountered fatal error, stopping execution: ${error}`)
-        process.exit(1)
+        process.exitCode= 1
     }
 )
