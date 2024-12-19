@@ -17,10 +17,22 @@ configs:
       log_level:
         $ref: '#/definitions/log_levels'
         default: 'debug'
+      # simulate_timeout: 
+      #   type: boolean
+      #   default: false
+      hubspot_records_per_page:
+        type: number
+        default: 20
     type: object
   uischema:
     elements:
     - label: Log Level
       scope: '#/properties/log_level'
+      type: Control
+    # - label: Simulate Timeout for QA
+    #   scope: '#/properties/simulate_timeout'
+    #   type: Control
+    - label: Hubspot Records Fetched in Each Page
+      scope: '#/properties/hubspot_records_per_page'
       type: Control
     type: VerticalLayout

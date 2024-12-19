@@ -1,89 +1,130 @@
 // To get Access to the .env where Pandium secrets, configs, and context can be accessed.
 import * as dotenv from 'dotenv'
-// Client Imports
-import hubspotClient from '@pandium/hubspot-client'
-import apolloioClient from '@pandium/apollo-io-client'
-
 dotenv.config()
 
-import { Config, Secret, Context } from './lib.js'
+import HubSpot from './hubspot/index.js'
+import Apollo from './apollo/index.js'
+import { companySync } from './processLogic/companySync.js'
+import { initSync } from './processLogic/initSync.js'
+import { Config, Secret, Context } from './libs/lib.js'
+import Metrics from './libs/metrics/metrics.js'
+import { ContextResourceProperties } from './libs/nextContext/types.js'
+import { namespaceLogger } from './libs/logger.js'
+import NextContext from './libs/nextContext/nextContext.js'
+const logger = namespaceLogger('Main')
+
+export const exitHandler = (
+    timedout: boolean,
+    exitCode: number,
+    metrics: Metrics,
+    nextContext: NextContext
+) => {
+    logger.info('------------------------RUN SUMMARY------------------------')
+    if (timedout) {
+        logger.info(
+            'Reaching 9 Minute Run Limit.  Saving Standard out and exiting run.'
+        )
+    }
+
+    metrics.printMetrics(logger)
+
+    // Maintain context from last run when it is an init sync
+    if (
+        process.env.PAN_CTX_LAST_SUCCESSFUL_RUN_STD_OUT &&
+        process.env.PAN_CTX_RUN_MODE !== 'normal'
+    ) {
+        const lastStandardOut = JSON.parse(
+            process.env.PAN_CTX_LAST_SUCCESSFUL_RUN_STD_OUT
+        )
+        const standardOutFields: Array<keyof ContextResourceProperties> = [
+            'page',
+            'lastStartDate',
+        ]
+        for (const standardOutField of standardOutFields) {
+            if (
+                lastStandardOut[standardOutField] &&
+                !nextContext.resources['companies'][standardOutField]
+            ) {
+                nextContext.resources['companies'][standardOutField] =
+                    lastStandardOut[standardOutField]
+            }
+        }
+    }
+
+    console.log(
+        JSON.stringify({
+            lastStartDate:
+                nextContext.resources['companies']?.lastStartDate || '',
+            page: nextContext.resources['companies']?.page || '',
+        })
+    )
+
+    process.exit(exitCode)
+}
 
 const run = async () => {
-    const abortController = new AbortController()
-    const context = new Context()
+    const metrics = new Metrics()
+    const nextContext = new NextContext()
+
+    logger.info('Initializing 9 minute timeout:')
+    const exitTimeout: ReturnType<typeof setTimeout> = setTimeout(
+        () => exitHandler(true, 0, metrics, nextContext),
+        9 * 60 * 1000
+    )
+
+    const thisContext = new Context()
     const secrets = new Secret()
     const config = new Config()
 
-    // Pandium integrations can be run in 'init' or 'normal' mode.
-    // When the integration is run on Pandium, Pandium will provide run_mode through context.
-    // During local development run mode is defined in the .env as PAN_CTX_RUN_MODE
-    console.error(`This run is in mode: ${context['run_mode']}`)
-    console.error('------------------------CONFIG------------------------')
-    console.error(config)
+    logger.info(`This run is in mode: ${thisContext['run_mode']}`)
 
-    console.error('------------------------SECRET------------------------')
-    console.error(secrets)
+    logger.info('------------------------CONFIG------------------------')
+    logger.info(JSON.stringify(config))
 
-    console.error('------------------------CONTEXT------------------------')
-    console.error(context)
+    logger.info('------------------------CONTEXT------------------------')
+    logger.info(JSON.stringify(thisContext))
 
-    console.error('------------------------ENV----------------------------')
-    console.error(process.env)
-
-    // Example client code:
-try {
-    const hsToken =
-        secrets.hubspot_oauth_access_token || secrets['hubspot_basic_api_key']
-    const hsClient = new hubspotClient(abortController, undefined, hsToken)
-
-    console.error('Fetching and Logging 10 Hubspot Contact')
-    const hsContacts = await hsClient.api.crm.contacts.getAll()
-
-    let contactCounter = 0
-    for await (let customer of hsContacts) {
-        if (contactCounter > 10) break
-        console.error(customer) // Here, each iteration will yield your data whenever it's ready. No need for Promise callbacks or async/await calls here.
-        contactCounter++
-    }
-} catch (error) {
-    console.error('❌ Unexpected Hubspot error...exiting')
-    // @ts-ignore
-    console.error(error.message)
-    console.error(error)
-    process.exit(1)
-}
-try {
-    const apiToken = secrets.apollo_io_api_key
-    const apollo = new apolloioClient(
-        'https://api.apollo.io/api/v1',
-        abortController,
-        apiToken
-    )
-    console.error('Fetching and Logging 10 Apollo.io Contact Names')
-    let contactCounter = 0
-    const contacts = await apollo.api.searchContacts(undefined)
-    for await (const contact of contacts) {
-        if (contactCounter > 10) break
-        console.error(
-            JSON.stringify(`${contact.first_name} ${contact.last_name} `)
+    try {
+        const hsClient = new HubSpot(
+            secrets['hubspot-basic_api_key'],
+            metrics,
+            nextContext
         )
-        contactCounter++
+        const apClient = new Apollo(
+            secrets['apollo-io_api_key'],
+            metrics,
+            nextContext
+        )
+
+        await initSync(hsClient, metrics)
+
+        if (thisContext['run_mode'] === 'normal') {
+            await companySync(
+                hsClient,
+                apClient,
+                thisContext,
+                metrics,
+                nextContext,
+                config
+            )
+        }
+    } catch (error) {
+        logger.error(`Encountered fatal error, stopping execution: ${error}`)
+        exitHandler(false, 1, metrics, nextContext)
     }
-} catch (error) {
-    console.error('❌ Unexpected Apollo.io error...exiting')
-    // @ts-ignore
-    console.error(error.message)
-    console.error(error)
-    process.exit(1)
-}
+
+    exitHandler(false, 0, metrics, nextContext)
 }
 
 // Waiting for the resolution of the run function's promise is the entry point for the whole integration.
 run().then(
     // When the promise is resolved no further action needed.
-    () => {},
-    // When the promise is rejected a nonzero exit code will fail the run.
     () => {
-        process.exitCode = 1
+        process.exit(0)
+    },
+    // When the promise is rejected a nonzero exit code will fail the run.
+    (error) => {
+        logger.error(`Encountered fatal error, stopping execution: ${error}`)
+        process.exit(1)
     }
 )

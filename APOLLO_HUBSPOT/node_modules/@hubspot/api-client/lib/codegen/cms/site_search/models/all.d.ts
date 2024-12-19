@@ -1,6 +1,0 @@
-export * from '../models/ContentSearchResult';
-export * from '../models/ErrorDetail';
-export * from '../models/IndexedData';
-export * from '../models/IndexedField';
-export * from '../models/ModelError';
-export * from '../models/PublicSearchResults';
