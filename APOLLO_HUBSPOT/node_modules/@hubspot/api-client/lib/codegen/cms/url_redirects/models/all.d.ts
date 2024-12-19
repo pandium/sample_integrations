@@ -1,0 +1,7 @@
+export * from '../models/CollectionResponseWithTotalUrlMappingForwardPaging';
+export * from '../models/ErrorDetail';
+export * from '../models/ForwardPaging';
+export * from '../models/ModelError';
+export * from '../models/NextPage';
+export * from '../models/UrlMapping';
+export * from '../models/UrlMappingCreateRequestBody';

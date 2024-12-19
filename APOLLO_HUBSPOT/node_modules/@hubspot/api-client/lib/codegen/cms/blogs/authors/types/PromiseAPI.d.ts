@@ -1,0 +1,32 @@
+import { Configuration } from '../configuration';
+import { AttachToLangPrimaryRequestVNext } from '../models/AttachToLangPrimaryRequestVNext';
+import { BatchInputBlogAuthor } from '../models/BatchInputBlogAuthor';
+import { BatchInputJsonNode } from '../models/BatchInputJsonNode';
+import { BatchInputString } from '../models/BatchInputString';
+import { BatchResponseBlogAuthor } from '../models/BatchResponseBlogAuthor';
+import { BatchResponseBlogAuthorWithErrors } from '../models/BatchResponseBlogAuthorWithErrors';
+import { BlogAuthor } from '../models/BlogAuthor';
+import { BlogAuthorCloneRequestVNext } from '../models/BlogAuthorCloneRequestVNext';
+import { CollectionResponseWithTotalBlogAuthorForwardPaging } from '../models/CollectionResponseWithTotalBlogAuthorForwardPaging';
+import { DetachFromLangGroupRequestVNext } from '../models/DetachFromLangGroupRequestVNext';
+import { SetNewLanguagePrimaryRequestVNext } from '../models/SetNewLanguagePrimaryRequestVNext';
+import { UpdateLanguagesRequestVNext } from '../models/UpdateLanguagesRequestVNext';
+import { BlogAuthorsApiRequestFactory, BlogAuthorsApiResponseProcessor } from "../apis/BlogAuthorsApi";
+export declare class PromiseBlogAuthorsApi {
+    private api;
+    constructor(configuration: Configuration, requestFactory?: BlogAuthorsApiRequestFactory, responseProcessor?: BlogAuthorsApiResponseProcessor);
+    archive(objectId: string, archived?: boolean, _options?: Configuration): Promise<void>;
+    archiveBatch(batchInputString: BatchInputString, _options?: Configuration): Promise<void>;
+    attachToLangGroup(attachToLangPrimaryRequestVNext: AttachToLangPrimaryRequestVNext, _options?: Configuration): Promise<void>;
+    create(blogAuthor: BlogAuthor, _options?: Configuration): Promise<BlogAuthor>;
+    createBatch(batchInputBlogAuthor: BatchInputBlogAuthor, _options?: Configuration): Promise<BatchResponseBlogAuthor | BatchResponseBlogAuthorWithErrors>;
+    createLangVariation(blogAuthorCloneRequestVNext: BlogAuthorCloneRequestVNext, _options?: Configuration): Promise<BlogAuthor>;
+    detachFromLangGroup(detachFromLangGroupRequestVNext: DetachFromLangGroupRequestVNext, _options?: Configuration): Promise<void>;
+    getById(objectId: string, archived?: boolean, _options?: Configuration): Promise<BlogAuthor>;
+    getPage(createdAt?: Date, createdAfter?: Date, createdBefore?: Date, updatedAt?: Date, updatedAfter?: Date, updatedBefore?: Date, sort?: Array<string>, after?: string, limit?: number, archived?: boolean, _options?: Configuration): Promise<CollectionResponseWithTotalBlogAuthorForwardPaging>;
+    readBatch(batchInputString: BatchInputString, archived?: boolean, _options?: Configuration): Promise<BatchResponseBlogAuthor | BatchResponseBlogAuthorWithErrors>;
+    setLangPrimary(setNewLanguagePrimaryRequestVNext: SetNewLanguagePrimaryRequestVNext, _options?: Configuration): Promise<void>;
+    update(objectId: string, blogAuthor: BlogAuthor, archived?: boolean, _options?: Configuration): Promise<BlogAuthor>;
+    updateBatch(batchInputJsonNode: BatchInputJsonNode, archived?: boolean, _options?: Configuration): Promise<BatchResponseBlogAuthor | BatchResponseBlogAuthorWithErrors>;
+    updateLangs(updateLanguagesRequestVNext: UpdateLanguagesRequestVNext, _options?: Configuration): Promise<void>;
+}
