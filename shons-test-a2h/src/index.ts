@@ -18,7 +18,7 @@ const run = async () => {
     // When the integration is run on Pandium, Pandium will provide run_mode through context.
     // During local development run mode is defined in the .env as PAN_CTX_RUN_MODE
     console.error(`This run is in mode: ${context['run_mode']}`)
-    console.error('------------------------SHON------------------------')
+    console.error('------------------------CRISTINA------------------------')
     console.error(config)
 
     console.error('------------------------SECRET------------------------')
