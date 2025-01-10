@@ -33,7 +33,7 @@ const run = async () => {
     // Example client code:
 try {
     const hsToken =
-        secrets.hubspot_oauth_access_token || secrets['hubspot_basic_api_key']
+        secrets.hubspot_oauth_access_token || secrets['hubspot_basic_api_key'] || secrets['hubspot-basic_api_key']
     const hsClient = new hubspotClient(abortController, undefined, hsToken)
 
     console.error('Fetching and Logging 10 Hubspot Contact')
@@ -52,7 +52,7 @@ try {
     console.error(error)
 }
 try {
-    const apiToken = secrets.apollo_io_api_key
+    const apiToken = secrets['apollo_io_api_key'] || secrets['apollo-io_api_key']
     const apollo = new apolloioClient(
         'https://api.apollo.io/api/v1',
         abortController,
