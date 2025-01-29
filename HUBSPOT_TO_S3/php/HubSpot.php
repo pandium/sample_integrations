@@ -8,8 +8,8 @@ class HubSpotAPI
     private HubSpot\Discovery\Discovery $hubspot;
     public function __construct($secret)
     {
-        $apiKey = $secret['hubspot_basic_api_key'];
-        $this->hubspot = HubSpot\Factory::createWithApiKey($apiKey);
+        $apiKey = $secret['hubspot_access_token'];
+        $this->hubspot = HubSpot\Factory::createWithAccessToken($apiKey);
     }
 
     /**
