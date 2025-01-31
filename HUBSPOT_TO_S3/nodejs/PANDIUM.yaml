@@ -1,5 +1,5 @@
 version: 0.4
-base: Node
+base: node:22.11.0
 build: npm install
 run: node .
 
