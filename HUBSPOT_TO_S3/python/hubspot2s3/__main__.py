@@ -18,7 +18,7 @@ def main():
     secrets = Secrets.from_env()
     context = Context.from_env()
 
-    logger.error("hi there!!")
+    logger.error("hi there!!!")
 
     print(f'This run is in mode: {context.run_mode}', file=sys.stderr)
     print(config, file=sys.stderr)
