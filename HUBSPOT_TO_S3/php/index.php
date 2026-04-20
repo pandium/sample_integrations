@@ -9,8 +9,8 @@ use Aws\S3\Exception\S3Exception;
 use League\Csv\Reader;
 use HubSpot\Client\Crm;
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
-$dotenv->load();
+$dotenv = \Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv->safeLoad();
 
 $context = Context::from_env();
 $secret = Secret::from_env();
