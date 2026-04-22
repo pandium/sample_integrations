@@ -13,6 +13,7 @@ const run = async () => {
     const context = new Context()
     const secrets = new Secret()
     const config = new Config()
+    console.log('something to commit')
 
     console.error(`This run is in mode: ${context['run_mode']}`)
     console.error('------------------------CONFIG------------------------')
