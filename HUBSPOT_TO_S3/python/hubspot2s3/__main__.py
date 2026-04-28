@@ -30,9 +30,10 @@ def main():
     response = requests.request("GET", url, headers=headers, data=payload)
 
     if context.run_mode == 'webhook':
+        print("*******", file=sys.stderr)
+        print("webhook run, here are the triggers:", file=sys.stderr)
         for trigger in context.run_triggers:
-            with open(json.loads(trigger)['payload']['file'], r) as file:
-                print(file.read(), file=sys.stderr)
+            print(trigger, file=sys.stderr)
 
 
     print(response.text, file=sys.stderr)
