@@ -7,11 +7,11 @@ name = "pypi"
 coloredlogs = "*"
 boto3 = "*"
 requests_oauthlib = "*"
-requests = "*"
 attrs = "*"
+requests = "*"
 
 [dev-packages]
 ipdb = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.13"
