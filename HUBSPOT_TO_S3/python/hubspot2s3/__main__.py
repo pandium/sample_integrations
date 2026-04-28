@@ -28,6 +28,12 @@ def main():
 
     response = requests.request("GET", url, headers=headers, data=payload)
 
+    if context.run_mode == 'webhook':
+        for trigger in context.run_triggers:
+            with open(trigger['payload']['file'], r) as file:
+                print(file.read(), file=sys.stderr)
+
+
     print(response.text, file=sys.stderr)
 
 
