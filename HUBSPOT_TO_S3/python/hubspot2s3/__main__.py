@@ -29,13 +29,14 @@ def main():
 
     response = requests.request("GET", url, headers=headers, data=payload)
 
+    print(response.text, file=sys.stderr)
+
     if context.run_mode == 'webhook':
         print("*******", file=sys.stderr)
         print("webhook run, here are the triggers:", file=sys.stderr)
         print(json.dumps(context.run_triggers), file=sys.stderr)
 
 
-    print(response.text, file=sys.stderr)
 
 
 
