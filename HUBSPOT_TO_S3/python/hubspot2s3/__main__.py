@@ -3,6 +3,7 @@ import logging
 import csv
 import io
 import requests
+import json
 
 from .lib import Config, Secrets, Context, truthy
 
@@ -30,7 +31,7 @@ def main():
 
     if context.run_mode == 'webhook':
         for trigger in context.run_triggers:
-            with open(trigger['payload']['file'], r) as file:
+            with open(json.loads(trigger)['payload']['file'], r) as file:
                 print(file.read(), file=sys.stderr)
 
 
