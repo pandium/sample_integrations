@@ -1,7 +1,7 @@
 version: 0.4
-base: php:8.5
-build: composer install
-run: php -f index.php
+base: python:3.14
+build: pipenv install
+run: pipenv run python -m pain_pain_pain
 configs:
   schema:
     properties:
