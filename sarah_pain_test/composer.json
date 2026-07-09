@@ -1,0 +1,7 @@
+{
+    "require": {
+        "vlucas/phpdotenv": "^5.3"
+    },
+    "name": "pandium/pain-pain-pain",
+    "description": "Sample Integration Script."
+}
