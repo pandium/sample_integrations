@@ -1,7 +1,10 @@
 import json
+import logging
 import os
 from functools import cached_property
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _from_env(prefix: str) -> dict[str, str]:
@@ -47,7 +50,23 @@ class Pandium:
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
+            logger.error('could not parse run triggers as JSON: %s', raw)
             return []
+
+    def webhook_payloads(self) -> list[str]:
+        """The raw webhook bodies for this run, read from the file each trigger's
+        ``payload['file']`` names. Relevant for webhook invocations."""
+        payloads = []
+        for trigger in self.run_triggers:
+            file = trigger.get('payload', {}).get('file')
+            if not file:
+                continue
+            try:
+                with open(file, encoding='utf-8') as f:
+                    payloads.append(f.read())
+            except OSError as err:
+                logger.error('could not read webhook payload %s: %s', file, err)
+        return payloads
 
     @cached_property
     def metadata(self) -> Any | None:
@@ -58,5 +77,13 @@ class Pandium:
         try:
             with open(filename, encoding='utf-8') as f:
                 return json.load(f)
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as err:
+            logger.error('could not read tenant metadata from %s: %s', filename, err)
             return None
+
+    def update_metadata(self, metadata: Any) -> None:
+        """Merge ``metadata`` into the tenant metadata that the next run reads back. Pandium
+        captures stdout and merges it into the stored tenant metadata, so this is the only
+        thing that should be written there."""
+        logger.info('updating metadata with %s', metadata)
+        print(json.dumps(metadata))

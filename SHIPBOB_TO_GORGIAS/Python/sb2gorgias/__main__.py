@@ -1,4 +1,3 @@
-import json
 import logging
 import random
 import sys
@@ -13,7 +12,7 @@ logger = logging.getLogger(__name__)
 coloredlogs.install(level='DEBUG', logger=logger, stream=sys.stderr)
 
 
-def run(mode: str, pandium: Pandium) -> dict[str, Any]:
+def run(mode: str | None, pandium: Pandium) -> dict[str, Any]:
     """The business logic of the run varies depending on the run mode."""
     match mode:
         case 'init':
@@ -24,18 +23,10 @@ def run(mode: str, pandium: Pandium) -> dict[str, Any]:
             return {'dynamic_colors': ['red', 'green', 'purple', 'orange', 'yellow']}
 
         case 'webhook':
-            # Webhook mode: each trigger's payload['file'] names a file holding the raw
-            # webhook body; read and log it. This version emits no metadata, but there is no
-            # reason not to update metadata from here.
-            for trigger in pandium.run_triggers:
-                file = trigger.get('payload', {}).get('file')
-                if not file:
-                    continue
-                try:
-                    with open(file, encoding='utf-8') as f:
-                        logger.info(f.read())
-                except OSError as err:
-                    logger.error('could not read webhook payload %s: %s', file, err)
+            # Webhook mode: log each trigger's raw webhook body. This version emits no
+            # metadata, but there is no reason not to update metadata from here.
+            for payload in pandium.webhook_payloads():
+                logger.info(payload)
             return {}
 
         case _:
@@ -52,13 +43,11 @@ def run(mode: str, pandium: Pandium) -> dict[str, Any]:
 def main() -> None:
     pandium = Pandium.from_env()
 
-    run_mode = pandium.run_mode or ''
-
     logger.info('Hello from a Pandium integration, written in Python!')
-    logger.info('This run is in mode:  %s', run_mode)
+    logger.info('This run is in mode:  %s', pandium.run_mode)
 
-    std_out = run(run_mode, pandium)
-    print(json.dumps(std_out))
+    metadata = run(pandium.run_mode, pandium)
+    pandium.update_metadata(metadata)
 
 
 if __name__ == '__main__':

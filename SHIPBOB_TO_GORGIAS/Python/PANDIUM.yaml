@@ -45,5 +45,6 @@ metadata_schema:
         type: array
         items:
           type: string
+        default: ['black', 'white']
       random_number:
         type: number
