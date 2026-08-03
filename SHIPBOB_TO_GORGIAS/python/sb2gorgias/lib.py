@@ -1,16 +1,37 @@
 import json
 import logging
 import os
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class WebhookDelivery:
+    """One webhook delivery handed to this run: the raw request body, plus the trigger
+    ``id``, which is useful for correlating with the run log."""
+
+    id: str
+    body: str
+
+
 def _from_env(prefix: str) -> dict[str, str]:
     """Collect environment variables starting with ``prefix``, stripping the prefix and
     lower-casing the remaining key."""
     return {key.removeprefix(prefix).lower(): value for key, value in os.environ.items() if key.startswith(prefix)}
+
+
+def deep_get(data, path: str, default=None):
+    """Safe nested lookup by dotted path, e.g. ``deep_get(order, 'recipient.address.city')``.
+    """
+    cur = data
+    for part in path.split('.'):
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(part)
+    return default if cur is None else cur
 
 
 class Pandium:
@@ -53,20 +74,33 @@ class Pandium:
             logger.error('could not parse run triggers as JSON: %s', raw)
             return []
 
-    def webhook_payloads(self) -> list[str]:
-        """The raw webhook bodies for this run, read from the file each trigger's
-        ``payload['file']`` names. Relevant for webhook invocations."""
-        payloads = []
+    def webhook_deliveries(self) -> list[WebhookDelivery]:
+        """The webhook deliveries bundled into this run.
+
+        Pandium debounces triggers per tenant, so deliveries that arrive while a run is in
+        flight are bundled into the next one — a webhook run carries N of these, not one.
+        Pandium writes each raw request body to disk, so the trigger names a file; reading
+        it back is this method's job, and callers get the body ready to handle."""
+        deliveries = []
         for trigger in self.run_triggers:
-            file = trigger.get('payload', {}).get('file')
-            if not file:
+            if trigger.get('source') != 'webhook':
                 continue
+
+            payload = trigger.get('payload') or {}
+            file = payload.get('file')
+            if not file:
+                logger.warning('webhook trigger %s has no payload file', trigger.get('id'))
+                continue
+
             try:
                 with open(file, encoding='utf-8') as f:
-                    payloads.append(f.read())
+                    body = f.read()
             except OSError as err:
                 logger.error('could not read webhook payload %s: %s', file, err)
-        return payloads
+                continue
+
+            deliveries.append(WebhookDelivery(id=str(trigger.get('id', '')), body=body))
+        return deliveries
 
     @cached_property
     def metadata(self) -> Any | None:
