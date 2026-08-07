@@ -16,7 +16,7 @@ python/
 │   ├── __main__.py         entry point; dispatches on run mode
 │   ├── lib.py              the Pandium runtime contract: config, secrets, context, metadata
 │   ├── cron.py             Flow A — resumable order sync
-│   ├── webhook.py          Flow B — delivered shipment → ticket, with dedupe
+│   ├── webhook.py          Flow B — shipment status webhook → ticket, with dedupe
 │   ├── shipbob.py          ShipBob client
 │   └── gorgias.py          Gorgias client
 └── tests/                  both flows covered end to end; no network
@@ -49,7 +49,7 @@ Both outcomes write through `Pandium.update_metadata`.
 ```python
 match mode:
     case 'webhook':
-        return webhook.run(pandium)   # Flow B — delivered shipment → ticket
+        return webhook.run(pandium)   # Flow B — shipment status → ticket
     case _:
         return cron.run(pandium)      # Flow A — scheduled order sync
 ```
@@ -81,8 +81,8 @@ pipenv run pytest
 ```
 
 ```
-.........                                                                [100%]
-9 passed in 0.09s
+..........                                                               [100%]
+10 passed in 0.09s
 ```
 
 `tests/helpers.py` builds a real `Pandium` object from a dict instead of the environment and
@@ -155,10 +155,14 @@ one with the same helper the tests use:
 mkdir -p /tmp/wh
 PYTHONPATH=.:tests pipenv run python -c "
 from pathlib import Path; import json
-from helpers import make_delivered_event, webhook_trigger
-print(json.dumps([webhook_trigger(Path('/tmp/wh'), make_delivered_event(), 't1')]))
+from helpers import make_shipment_event, webhook_trigger
+print(json.dumps([webhook_trigger(Path('/tmp/wh'), make_shipment_event(), 't1')]))
 "
 ```
+
+`make_shipment_event(shipment_id, status=...)` takes any ShipBob status, and
+`make_onhold_event()` next to it builds the harder shape — status details, no tracking, no
+recipient email — if you want to exercise the external_id customer path.
 
 Add the printed array to `.env` as `PAN_CTX_RUN_TRIGGERS`. Then run it either way — via the
 CLI with `pandium local run <tenant_id> -m webhook`, or on its own by flipping

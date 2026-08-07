@@ -1,7 +1,8 @@
 # ShipBob to Gorgias
 
 A Pandium sample integration that puts a customer's ShipBob order history on their
-Gorgias profile, and opens a Gorgias ticket when a shipment is delivered.
+Gorgias profile, and opens a Gorgias ticket whenever one of their shipments changes
+status.
 
 ## Implementations
 
@@ -64,7 +65,9 @@ Two important details:
   never exactly one.
 - Because deliveries can repeat — ShipBob retries anything that doesn't get a 2xx, and
   debouncing can re-present a trigger — and because `POST /tickets` is not idempotent, the
-  flow dedupes on `shipment_id` before it opens anything.
+  flow dedupes on `shipment_id:status` before it opens anything. Keying on the status as
+  well as the shipment is what lets a redelivery be dropped while the shipment's *next*
+  status still gets its own ticket.
 
 ### 3. Per-tenant state in tenant metadata
 
@@ -84,7 +87,7 @@ This sample keeps three keys there:
 {
   "new_order_start_date": "2026-07-01T00:00:00",
   "updated_order_start_date": "2026-07-01T00:00:00",
-  "processed_shipments": { "456789": "2026-07-09T18:22:10Z" }
+  "processed_events": { "456789:Delivered": "2026-07-09T18:22:10Z" }
 }
 ```
 
@@ -113,11 +116,24 @@ derived from the oldest shipment timestamp that still falls after the cursor —
 conservative, since re-processing an order is harmless (customer writes are idempotent PUTs)
 but skipping one is not.
 
-**WEBHOOK: `shipment_delivered` → Gorgias ticket.** For each trigger: parse the body,
-skip anything that isn't `Delivered`, skip any `shipment_id`
-already in the pruned `processed_shipments` map, look up the customer by email, and
-`POST /tickets`. A ticket that fails to create is deliberately *not* marked processed, so
+**WEBHOOK: ShipBob order webhook → Gorgias ticket.** ShipBob's order-related topics —
+`order_shipped`, `shipment_delivered`, `shipment_exception`, `shipment_onhold`,
+`shipment_cancelled` — all deliver the same shipment object and differ only in `status`
+and `status_details`. The flow opens a ticket for every one of them, so a shipment that
+goes `OnHold` on an invalid address reaches support at the point it needs a human, not
+only once it lands.
+
+For each trigger: parse the body, skip any `shipment_id:status` already in the pruned
+`processed_events` map, find-or-create the customer, and `POST /tickets`. The ticket
+carries the status, ShipBob's `status_details` reasons, the items, and tracking when the
+status has any, and is tagged `shipbob-shipment` plus `shipbob-<status>` so Gorgias rules
+can route on it. A ticket that fails to create is deliberately *not* marked processed, so
 ShipBob's retry gets another chance.
+
+Customers are resolved the same way the cron flow resolves them — by valid recipient email
+when there is one, by the synthetic `name address1 city country` external_id otherwise — so
+the ticket lands on the same record that carries the order history. Recipient email is
+optional on a ShipBob shipment, so both paths matter here.
 
 ---
 

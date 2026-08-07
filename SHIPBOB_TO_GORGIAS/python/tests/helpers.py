@@ -67,14 +67,33 @@ def make_order(oid, created, email=None, last_update=None):
     }
 
 
-def make_delivered_event(shipment_id=456789, status='Delivered', email='jane@example.com'):
+def make_shipment_event(shipment_id=456789, status='Delivered', email='jane@example.com',
+                        status_details=None):
+    """A ShipBob shipment webhook body. Every order-related topic delivers this same
+    object; ``status`` and ``status_details`` are what vary between them."""
     return {
-        'order_id': 289012345, 'reference_id': 'MERCHANT-ORDER-1001',
-        'shipment_id': shipment_id, 'status': status,
+        'id': shipment_id, 'order_id': 289012345, 'reference_id': 'MERCHANT-ORDER-1001',
+        'status': status, 'status_details': status_details or [],
         'tracking': {'carrier': 'USPS', 'tracking_number': '9400100000000000000000'},
         'delivery_date': '2026-07-09T18:22:00Z',
-        'recipient': {'name': 'Jane Buyer', 'email': email},
+        'products': [{'name': 'Pinnacle Shampoo', 'sku': 'PIN-100',
+                      'inventory_items': [{'name': 'Pinnacle Shampoo', 'quantity': 4}]}],
+        'recipient': {'name': 'Jane Buyer', 'email': email,
+                      'address': {'address1': '100 Nowhere Blvd', 'city': 'Gotham City',
+                                  'country': 'US'}},
     }
+
+
+def make_onhold_event(shipment_id=107414278):
+    """An OnHold shipment: status details, no tracking, and no recipient email."""
+    event = make_shipment_event(
+        shipment_id, status='OnHold', email=None,
+        status_details=[{'id': 401, 'name': 'InvalidAddress', 'description': 'Invalid Address'},
+                        {'id': 400, 'name': 'PaymentDeclined', 'description': 'Payment Failure'}],
+    )
+    event['tracking'] = None
+    event['delivery_date'] = None
+    return event
 
 
 def webhook_trigger(tmp_path, event, tid, source='webhook'):

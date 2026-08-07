@@ -136,6 +136,7 @@ def run(pandium) -> dict:
         if not orders:
             break
         for order in orders:
+            logger.info('Processing new order with id %s', order["id"])
             process_order(order, gorgias, cache, newest_first)
             created = order.get('created_date')
             if created:
@@ -152,6 +153,7 @@ def run(pandium) -> dict:
         if not orders:
             break
         for order in orders:
+            logger.info('Processing updated order with id %s', order["id"])
             process_order(order, gorgias, cache, newest_first)
             # last_update_at is YYYY-MM-DDThh:mm:ss.sss+00:00; trim to 23 chars.
             record['updated_order_start_date'] = shipbob.get_update_date(order, updated_cursor)[:23]

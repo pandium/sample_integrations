@@ -15,8 +15,8 @@ coloredlogs.install(level='DEBUG', logger=logging.getLogger(__package__), stream
 def run(mode: str | None, pandium: Pandium) -> dict[str, Any]:
     match mode:
         case 'webhook':
-            # Webhook mode: ShipBob shipment_delivered deliveries (Pandium debounces
-            # them into one run) -> a Gorgias ticket per newly delivered shipment.
+            # Webhook mode: ShipBob order webhook deliveries (Pandium debounces them
+            # into one run) -> a Gorgias ticket per shipment status not seen yet.
             return webhook.run(pandium)
 
         case _:

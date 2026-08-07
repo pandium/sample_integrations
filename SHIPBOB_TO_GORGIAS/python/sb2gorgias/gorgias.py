@@ -80,6 +80,7 @@ class GorgiasAPI:
         """Look a customer up by email or external_id and return the detail
         record (so callers can read ``data``), or None if not found. A given
         email/external_id maps to at most one customer, so no pagination needed."""
+        logger.info("looking for gorgias customer: %s, %s", email, external_id)
         if email:
             query = f'email={quote(email.lower())}'
         elif external_id:
@@ -91,32 +92,39 @@ class GorgiasAPI:
         res.raise_for_status()
         rows = res.json().get('data', [])
         if not rows:
+            logger.info("Customer not found")
             return None
 
         detail = self._session.get(f'{self.api_url}/customers/{rows[0]["id"]}')
         detail.raise_for_status()
+        logger.info("Customer found")
         return detail.json()
 
     def create_customer(self, payload: dict):
+        logger.info("creating new gorgias customer")
         res = self._session.post(f'{self.api_url}/customers', json=payload)
         try:
             res.raise_for_status()
         except Exception:
             logger.error('Create customer failed: %s', res.text)
             raise
+        logger.info("Customer created successfully")
         return res.json()['id']
 
     def update_customer(self, customer_id, payload: dict):
+        logger.info(f"updating gorgias customer {customer_id}")
         res = self._session.put(f'{self.api_url}/customers/{customer_id}', json=payload)
         try:
             res.raise_for_status()
         except Exception:
             logger.error('Update customer %s failed: %s', customer_id, res.text)
             raise
+        logger.info("customer updated")
 
     # --- tickets (webhook flow) ---------------------------------------------------
 
     def create_ticket(self, payload: dict) -> dict:
+        logger.info("creating gorgias ticket")
         res = self._session.post(f'{self.api_url}/tickets', json=payload)
         try:
             res.raise_for_status()
