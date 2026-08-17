@@ -75,8 +75,9 @@ def _items(event: dict) -> str:
 def build_ticket(event: dict, customer_ref: dict) -> dict:
     """Build the POST /tickets payload for a shipment webhook of any status.
 
-    ``customer_ref`` is what Gorgias should attach the ticket to — ``{'id': ...}`` for
-    a customer we resolved, or ``{'email': ...}`` to let Gorgias resolve it.
+    ``customer_ref`` is the ``{'id': ...}`` returned by ``resolve_customer``. Gorgias
+    wants the customer twice — once as the ticket's owner and once as the sender of
+    its first message — so the same reference goes in both slots.
     """
     sid = shipment_id(event)
     order_id = deep_get(event, 'order_id', '')

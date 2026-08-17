@@ -31,15 +31,21 @@ EMAIL_RE = re.compile(
 )
 
 
+# ShipBob sends 7-digit fractional seconds; fromisoformat takes at most 6.
+ISO_LONG_FRACTION_RE = re.compile(r'(\.\d{6})\d+')
+
+
 def _format_date(value: str) -> str:
     """Render a ShipBob ISO timestamp for the customer sidebar; pass through on
-    anything unparseable. Trims to 26 chars so 7-digit fractional seconds parse."""
+    anything unparseable. Cuts the fractional seconds rather than the string, so
+    the UTC offset survives for ``%Z`` to render."""
     if not value:
         return ''
     try:
-        return datetime.fromisoformat(value[:26]).strftime('%d/%m/%Y %H:%M:%S')
+        parsed = datetime.fromisoformat(ISO_LONG_FRACTION_RE.sub(r'\1', value))
     except (ValueError, TypeError):
         return value
+    return parsed.strftime('%d/%m/%Y %H:%M:%S %Z').strip()
 
 
 class GorgiasAPI:
@@ -147,12 +153,13 @@ class GorgiasAPI:
         email = self.valid_email(deep_get(sb_order, 'recipient.email', ''))
         if email:
             return email
+        address = deep_get(sb_order, 'recipient.address', {})
         return ' '.join(
             [
                 deep_get(sb_order, 'recipient.name', '') or '',
-                deep_get(sb_order, 'recipient.address.address1', '') or '',
-                deep_get(sb_order, 'recipient.address.city', '') or '',
-                deep_get(sb_order, 'recipient.address.country', '') or '',
+                deep_get(address, 'address1', '') or '',
+                deep_get(address, 'city', '') or '',
+                deep_get(address, 'country', '') or '',
             ]
         )
 

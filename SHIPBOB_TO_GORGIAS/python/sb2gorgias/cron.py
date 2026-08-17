@@ -75,10 +75,16 @@ def process_order(sb_order: dict, gorgias: GorgiasAPI, cache: dict, newest_first
             return
 
         if existing:
+            # Anything already under data.pandium came from outside this
+            # integration — a hand-edited customer can carry {"pandium": null} —
+            # so check the type at every level rather than just the leaf.
             data = existing.get('data') or {}
-            data.setdefault('pandium', {})
-            if not isinstance(data['pandium'].get('shipbob_orders'), list):
-                data['pandium']['shipbob_orders'] = []
+            pandium = data.get('pandium')
+            if not isinstance(pandium, dict):
+                pandium = {}
+            if not isinstance(pandium.get('shipbob_orders'), list):
+                pandium['shipbob_orders'] = []
+            data['pandium'] = pandium
             cache[key] = {'id': existing['id'], 'data': data}
         else:
             cache[key] = gorgias.new_customer_payload(sb_order, key)
@@ -148,6 +154,13 @@ def run(pandium) -> dict:
     # Updated orders: keyed off shipment last_update_at (see get_updated_orders_page).
     logger.info('Syncing updated ShipBob orders since %s', record['updated_order_start_date'])
     page = 1
+    # Each page is sorted newest-first, but pages are not sorted relative to each
+    # other, so the cursor has to be the running minimum across every processed
+    # order — not whatever the last order of the last page happened to carry.
+    # Tracked separately from the record because every update date is, by
+    # construction, later than the starting cursor: folding the start value into
+    # the min would pin the cursor there forever.
+    oldest_update = None
     while True:
         orders = shipbob.get_updated_orders_page(updated_cursor, page)
         if not orders:
@@ -156,7 +169,11 @@ def run(pandium) -> dict:
             logger.info('Processing updated order with id %s', order["id"])
             process_order(order, gorgias, cache, newest_first)
             # last_update_at is YYYY-MM-DDThh:mm:ss.sss+00:00; trim to 23 chars.
-            record['updated_order_start_date'] = shipbob.get_update_date(order, updated_cursor)[:23]
+            # Uniform width and format, so a string compare orders them correctly.
+            update_date = shipbob.get_update_date(order, updated_cursor)[:23]
+            if oldest_update is None or update_date < oldest_update:
+                oldest_update = update_date
+                record['updated_order_start_date'] = oldest_update
         page += 1
 
     signal.alarm(0)  # made it — cancel the alarm; __main__ prints the record on return

@@ -21,7 +21,7 @@ AUTH_URL_TO_BASE_URL = {
     'https://authstage.shipbob.com': 'https://sandbox-api.shipbob.com/2026-01',
     'https://auth.shipbob.com': 'https://api.shipbob.com/2026-01',
 }
-DEFAULT_BASE_URL = 'https://api.shipbob.com/1.0'
+DEFAULT_BASE_URL = 'https://api.shipbob.com/2026-01'
 
 
 def _resolve_base_url(token: str) -> str:

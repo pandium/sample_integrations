@@ -1,6 +1,6 @@
 import json
 import signal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from helpers import GORGIAS_SECRETS, make_order, make_pandium, recording_gorgias
@@ -59,6 +59,33 @@ def test_run_pages_until_empty_upserts_customer_and_advances_cursor(monkeypatch)
     assert record['new_order_start_date'] == '2026-07-06T10:00:00.123456'  # advanced to last order
     final_orders = gorgias.log['update'][-1][1]['data']['pandium']['shipbob_orders']
     assert sorted(o['id'] for o in final_orders) == [1, 2]
+
+
+def test_run_advances_updated_cursor_to_oldest_update_across_pages(monkeypatch):
+    """Pages are each sorted newest-first, but not relative to each other, so the
+    cursor has to be the oldest update seen anywhere — not the last one processed."""
+    # Days back from now, so every timestamp stays inside clamp's 30-day window.
+    def ago(days):
+        return (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%S.000+00:00')
+
+    class Updating(FakeShipBob):
+        def __init__(self):
+            super().__init__([])
+            self.updated_pages = [
+                [make_order(1, ago(2), email='j@x.com'), make_order(2, ago(3), email='j@x.com')],
+                [make_order(3, ago(9), email='j@x.com'),   # oldest update overall
+                 make_order(4, ago(8), email='j@x.com')],
+                [make_order(5, ago(4), email='j@x.com')],  # newer again, after the oldest page
+            ]
+
+        def get_updated_orders_page(self, cursor, page):
+            return self.updated_pages[page - 1] if page <= len(self.updated_pages) else []
+
+    _patch(monkeypatch, Updating(), recording_gorgias())
+
+    record = cron.run(make_pandium(secrets=GORGIAS_SECRETS, config={'order_start_date': ago(20)}))
+
+    assert record['updated_order_start_date'] == ago(9)[:23]  # not order 5, the last one processed
 
 
 def test_run_flushes_partial_cursor_and_exits_zero_on_timeout(monkeypatch, capsys):
