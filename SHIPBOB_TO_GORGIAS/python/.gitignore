@@ -1,0 +1,10 @@
+# Byte-compiled and cached files
+__pycache__/
+*.py[cod]
+
+# Local virtual environments
+.venv/
+
+# Local credentials and run state
+.env
+metadata.json
