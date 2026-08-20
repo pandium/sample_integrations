@@ -1,0 +1,152 @@
+// Adapted from the node-ts scaffold (pandium/integrations@test-metadata-1.0:
+// metadata/test-scaffolding/node-ts/src/lib.ts). One deviation from the scaffold:
+// WebhookPayload carries trigger.id for log correlation, matching sb2gorgias's
+// (the Python reference implementation's) WebhookDelivery.id.
+
+import * as fs from 'fs'
+
+import { getLogger } from './logger.js'
+
+const logger = getLogger(import.meta.url)
+
+export function isTruthy(value: string) {
+    return ['true', '1', 't', 'y', 'yes'].includes(value)
+}
+
+/** Safe nested lookup by dotted path, e.g. `deepGet(order, 'recipient.address.city')`. */
+export function deepGet<T = any>(data: any, path: string, defaultValue?: T): T {
+    let cur = data
+    for (const part of path.split('.')) {
+        if (cur === null || typeof cur !== 'object') return defaultValue as T
+        cur = cur[part]
+    }
+    return cur === null || cur === undefined ? (defaultValue as T) : cur
+}
+
+/** Collect environment variables starting with `prefix`, stripping the prefix and
+ * lower-casing the remaining key. */
+function fromEnv(prefix: string): { [key: string]: string } {
+    const result: { [key: string]: string } = {}
+    for (const [key, val] of Object.entries(process.env)) {
+        if (key.startsWith(prefix) && val) {
+            result[key.slice(prefix.length).toLowerCase()] = val
+        }
+    }
+    return result
+}
+
+export interface WebhookPayload {
+    id: string
+    body: any
+    headers: any
+}
+
+interface RunTrigger {
+    id?: string | number
+    mode?: string
+    payload?: {
+        file?: string
+        headers?: any
+    }
+}
+
+/** A tenant's configs, keyed by config name. A key may be absent if never set. */
+export type Config = { [key: string]: string | undefined }
+
+/**
+ * Everything Pandium hands to an integration at runtime. `config` (`PAN_CFG_*`) and
+ * `secrets` (`PAN_SEC_*`) hold arbitrary keys defined per integration and are exposed as
+ * plain maps. `context` (`PAN_CTX_*`) is controlled by Pandium, so its values are surfaced
+ * through named methods.
+ */
+export class Pandium {
+    config: Config
+    secrets: { [key: string]: string }
+    private context: { [key: string]: string }
+    private metadataCache: any
+    private metadataLoaded = false
+
+    constructor(config: Config, secrets: { [key: string]: string }, context: { [key: string]: string }) {
+        this.config = config
+        this.secrets = secrets
+        this.context = context
+    }
+
+    static fromEnv(): Pandium {
+        return new Pandium(fromEnv('PAN_CFG_'), fromEnv('PAN_SEC_'), fromEnv('PAN_CTX_'))
+    }
+
+    /** The run mode for this invocation (e.g. `init`, `webhook`). */
+    runMode(): string | undefined {
+        return this.context['run_mode']
+    }
+
+    /**
+     * The triggers that caused this run, parsed from JSON. Relevant for webhook
+     * invocations, where each trigger's `payload.file` names a file holding the raw
+     * webhook body.
+     */
+    runTriggers(): RunTrigger[] {
+        const raw = this.context['run_triggers']
+        if (!raw) return []
+        try {
+            return JSON.parse(raw)
+        } catch (err) {
+            logger.error(`could not parse run triggers as JSON: ${raw}: ${err}`)
+            return []
+        }
+    }
+
+    /**
+     * The webhook payloads for this run: each trigger's id, headers, and parsed body, read
+     * from the file its `payload.file` names. Relevant for webhook invocations.
+     *
+     * Pandium debounces triggers per tenant, so deliveries that arrive while a run is in
+     * flight are bundled into the next one — a webhook run carries N of these, not one.
+     */
+    webhookPayloads(): WebhookPayload[] {
+        const payloads: WebhookPayload[] = []
+        for (const trigger of this.runTriggers()) {
+            if (!trigger.mode || trigger.mode !== 'webhook') continue
+            const file = trigger.payload?.file
+            if (!file) continue
+            try {
+                const body = fs.readFileSync(file, 'utf-8')
+                payloads.push({
+                    id: String(trigger.id ?? ''),
+                    headers: trigger.payload?.headers,
+                    body: JSON.parse(body),
+                })
+            } catch (err) {
+                logger.error(`could not read webhook payload ${file}: ${err}`)
+            }
+        }
+        return payloads
+    }
+
+    /** The tenant metadata persisted by the previous run, parsed as JSON. */
+    metadata(): any {
+        if (this.metadataLoaded) return this.metadataCache
+
+        this.metadataLoaded = true
+        const filename = this.context['tenant_metadata_file']
+        if (!filename) return undefined
+        try {
+            this.metadataCache = JSON.parse(fs.readFileSync(filename, 'utf-8'))
+        } catch (err) {
+            logger.error(`could not read tenant metadata from ${filename}: ${err}`)
+            this.metadataCache = undefined
+        }
+        return this.metadataCache
+    }
+
+    /**
+     * Merge `metadata` into the tenant metadata that the next run reads back. Pandium
+     * captures stdout and merges it into the stored tenant metadata, so this is the only
+     * thing that should be written there.
+     */
+    updateMetadata(metadata: any): void {
+        logger.info(`updating metadata with ${JSON.stringify(metadata)}`)
+        console.log(JSON.stringify(metadata))
+    }
+}
