@@ -1,145 +1,24 @@
-use std::collections::HashMap;
-use std::env;
+//! ShipBob to Gorgias — a Pandium sample integration.
+//!
+//! Two flows share one binary and are selected by the run mode:
+//!
+//! * [`cron`] — the scheduled sync that writes each customer's recent ShipBob
+//!   orders onto their Gorgias record, resuming where the last run stopped.
+//! * [`webhook`] — a Gorgias ticket for every ShipBob shipment status change.
+//!
+//! [`pandium`] is the file to read first: it is the whole platform contract in
+//! one place — config, secrets, run context, and the single stdout write that
+//! hands metadata back to Pandium.
 
-use serde_json::{from_str, Value};
+pub mod cron;
+pub mod dates;
+pub mod gorgias;
+pub mod http;
+pub mod pandium;
+pub mod shipbob;
+pub mod webhook;
 
-/// A bag of key/value pairs collected from environment variables sharing a
-/// common prefix. Pandium exposes config, secrets, and context to the
-/// integration this way.
-struct Item {
-    items: HashMap<String, String>,
-}
+#[cfg(test)]
+mod fakes;
 
-impl Item {
-    /// Collect every environment variable starting with `prefix`, stripping the
-    /// prefix and lower-casing the remaining key.
-    fn from_env(prefix: &str) -> Self {
-        let items = env::vars()
-            .filter_map(|(key, value)| {
-                let stripped = key.strip_prefix(prefix)?;
-                Some((stripped.to_lowercase(), value))
-            })
-            .collect();
-        Self { items }
-    }
-
-    /// Look up a single value by its (prefix-stripped, lower-cased) key.
-    fn get(&self, key: &str) -> Option<&str> {
-        self.items.get(key).map(String::as_str)
-    }
-
-    /// Every (prefix-stripped, lower-cased) key.
-    fn keys(&self) -> Vec<&str> {
-        self.items.keys().map(String::as_str).collect()
-    }
-
-    /// A human-readable, comma-separated rendering of every key/value pair.
-    fn repr(&self) -> String {
-        self.items
-            .iter()
-            .map(|(key, value)| format!("{key}: {value}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-}
-
-/// Everything Pandium hands to an integration at runtime. Config (`PAN_CFG_*`)
-/// and secrets (`PAN_SEC_*`) hold arbitrary keys defined per integration, so
-/// they are looked up by free-text name. Context (`PAN_CTX_*`) is controlled by
-/// Pandium, so its values are exposed through consistently named functions.
-pub struct Pandium {
-    config: Item,
-    secrets: Item,
-    context: Item,
-}
-
-impl Pandium {
-    pub fn from_env() -> Self {
-        Self {
-            config: Item::from_env("PAN_CFG_"),
-            secrets: Item::from_env("PAN_SEC_"),
-            context: Item::from_env("PAN_CTX_"),
-        }
-    }
-
-    /// Look up a config value by name.
-    pub fn config(&self, key: &str) -> Option<&str> {
-        self.config.get(key)
-    }
-
-    /// Look up a secret value by name.
-    pub fn secret(&self, key: &str) -> Option<&str> {
-        self.secrets.get(key)
-    }
-
-    /// The run mode for this invocation (e.g. `init`, `webhook`).
-    pub fn run_mode(&self) -> Option<&str> {
-        self.context.get("run_mode")
-    }
-
-    /// The triggers that caused this run, parsed from JSON. Relevant for webhook
-    /// invocations, where each trigger's `payload.file` names a file holding the
-    /// raw webhook body.
-    pub fn run_triggers(&self) -> Vec<Value> {
-        let Some(raw) = self.context.get("run_triggers") else {
-            return Vec::new();
-        };
-        match from_str::<Vec<Value>>(raw) {
-            Ok(triggers) => triggers,
-            Err(err) => {
-                eprintln!("could not parse run triggers as JSON: {err}");
-                Vec::new()
-            }
-        }
-    }
-
-    /// The raw webhook bodies for this run, read from the file each trigger's
-    /// `payload.file` names. Relevant for webhook invocations.
-    pub fn webhook_payloads(&self) -> Vec<String> {
-        let mut payloads = Vec::new();
-        for trigger in self.run_triggers() {
-            let Some(file) = trigger["payload"]["file"].as_str() else {
-                continue;
-            };
-            match std::fs::read_to_string(file) {
-                Ok(payload) => payloads.push(payload),
-                Err(err) => eprintln!("could not read webhook payload {file}: {err}"),
-            }
-        }
-        payloads
-    }
-
-    /// The tenant metadata persisted by the previous run, parsed as JSON.
-    pub fn metadata(&self) -> Option<Value> {
-        let filename = self.context.get("tenant_metadata_file")?;
-        let read = || -> Result<Value, Box<dyn std::error::Error>> {
-            let raw = std::fs::read_to_string(filename)?;
-            Ok(from_str(&raw)?)
-        };
-        match read() {
-            Ok(metadata) => Some(metadata),
-            Err(err) => {
-                eprintln!("could not read tenant metadata from {filename}: {err}");
-                None
-            }
-        }
-    }
-
-    /// Merge `metadata` into the tenant metadata that the next run reads back.
-    /// Pandium captures stdout and merges it into the stored tenant metadata, so
-    /// this is the only thing that should be written there.
-    pub fn update_metadata(&self, metadata: &Value) {
-        eprintln!("updating metadata with {metadata}");
-        println!("{metadata}");
-    }
-
-    /// A human-readable rendering of every config key/value pair.
-    pub fn config_repr(&self) -> String {
-        self.config.repr()
-    }
-
-    /// The names of every available secret, values omitted.
-    pub fn secret_keys(&self) -> Vec<&str> {
-        self.secrets.keys()
-    }
-}
+pub use pandium::Pandium;

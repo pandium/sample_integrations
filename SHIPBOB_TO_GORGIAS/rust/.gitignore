@@ -6,3 +6,7 @@
 
 # Debug info emitted by MSVC toolchains
 *.pdb
+
+# Local credentials and run state
+.env
+metadata.json
