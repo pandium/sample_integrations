@@ -13,6 +13,8 @@ implementation declares the same connectors, configs, and metadata schema — on
 | Language | Notes |
 | --- | --- |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
+| [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
+| [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
 
 More languages are on the way.
 
