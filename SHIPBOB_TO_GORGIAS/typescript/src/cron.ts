@@ -11,15 +11,13 @@
  * 0 on timeout means the partial cursor is merged into metadata and the next run
  * picks up from there.
  *
- * Python arms this deadline with a SIGALRM signal handler; Node has no equivalent
- * for an arbitrary in-process alarm, so this uses an injectable setTimeout-based
- * watchdog instead (see `armWatchdog`/`exit` on CronDeps — the default uses a real
- * timer and process.exit, tests substitute both to trigger the timeout
- * deterministically).
+ * The deadline is an injectable setTimeout-based watchdog (see `armWatchdog`/`exit`
+ * on CronDeps — the default uses a real timer and process.exit; tests substitute
+ * both to trigger the timeout deterministically).
  */
 
 import { GorgiasAPI, GorgiasClient } from './gorgias.js'
-import { isTruthy, Pandium } from './lib.js'
+import { Pandium } from './lib.js'
 import { getLogger } from './logger.js'
 import { ShipBobAPI, ShipBobClient } from './shipbob.js'
 
@@ -131,8 +129,8 @@ export async function run(pandium: Pandium, deps: CronDeps = {}): Promise<Record
     const metadata = pandium.metadata() ?? {}
     const fallback = pandium.config['order_start_date']
 
-    const newCursor = clamp(metadata.new_order_start_date ?? fallback, now)
-    const updatedCursor = clamp(metadata.updated_order_start_date ?? fallback, now)
+    const newCursor = clamp(metadata.new_order_start_date || fallback, now)
+    const updatedCursor = clamp(metadata.updated_order_start_date || fallback, now)
 
     // The timeout record: the cursor written on either outcome. Values are ISO
     // strings advanced as orders are processed.
@@ -151,7 +149,7 @@ export async function run(pandium: Pandium, deps: CronDeps = {}): Promise<Record
     try {
         const shipbob = deps.shipbob ?? new ShipBobAPI(pandium)
         const gorgias = deps.gorgias ?? new GorgiasAPI(pandium)
-        const newestFirst = isTruthy(String(pandium.config['newest_order_first'] ?? '').toLowerCase())
+        const newestFirst = String(pandium.config['newest_order_first'] ?? '').toLowerCase() === 'true'
         const cache = new Map<string, any>()
 
         // New orders: SortOrder=Oldest, so created_date advances forward monotonically.
@@ -200,7 +198,7 @@ export async function run(pandium: Pandium, deps: CronDeps = {}): Promise<Record
             page += 1
         }
 
-        watchdog.cancel() // made it — cancel, mirrors signal.alarm(0)
+        watchdog.cancel() // made it — no timeout to flush
         return record
     } catch (err) {
         watchdog.cancel()

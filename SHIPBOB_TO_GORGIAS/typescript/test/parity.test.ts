@@ -1,7 +1,5 @@
-// Not in the Python suite: the cron and webhook flows resolve "the same customer" via the
-// same GorgiasAPI helpers (customerKey/validEmail), but Python's separate test files never
-// cross-check that a matching recipient produces the same key from both an order and a
-// shipment-event fixture. Guards against that drifting.
+// The cron and webhook flows must resolve "the same customer" via the same
+// GorgiasAPI helpers — guards against them drifting on how a recipient maps to a key.
 
 import assert from 'node:assert/strict'
 import { test } from 'node:test'

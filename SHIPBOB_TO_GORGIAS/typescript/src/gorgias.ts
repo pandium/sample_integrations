@@ -31,6 +31,8 @@ const EMAIL_RE =
 // rearranges the digits already in the string, so no timezone conversion can happen.
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?/
 
+/** Render a ShipBob ISO timestamp for the customer sidebar; pass through on
+ * anything unparseable. */
 function formatDate(value?: string): string {
     if (!value) return ''
     const m = ISO_RE.exec(value)
@@ -75,6 +77,7 @@ export class GorgiasAPI implements GorgiasClient {
                 Authorization: `${tokenType} ${token}`,
             },
         })
+        // Exponential backoff: 2s, 4s, 8s, ... Only GET/POST/PUT are ever called by this client.
         axiosRetry(session, {
             retries: 6,
             retryCondition: (err) =>

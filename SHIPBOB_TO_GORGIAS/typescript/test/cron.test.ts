@@ -110,7 +110,7 @@ test('run advances updated cursor to the oldest update seen across pages, not th
     assert.equal(record.updated_order_start_date, ago(9).slice(0, 23)) // not order 5, the last one processed
 })
 
-test('run flushes the partial cursor and exits 0 when the watchdog fires mid-page', async () => {
+test('run flushes the partial cursor and exits zero on timeout', async () => {
     class WatchdogExit extends Error {
         constructor(public code: number) {
             super(`exit ${code}`)

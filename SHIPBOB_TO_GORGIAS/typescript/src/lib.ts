@@ -1,17 +1,8 @@
-// Adapted from the node-ts scaffold (pandium/integrations@test-metadata-1.0:
-// metadata/test-scaffolding/node-ts/src/lib.ts). One deviation from the scaffold:
-// WebhookPayload carries trigger.id for log correlation, matching sb2gorgias's
-// (the Python reference implementation's) WebhookDelivery.id.
-
 import * as fs from 'fs'
 
 import { getLogger } from './logger.js'
 
 const logger = getLogger(import.meta.url)
-
-export function isTruthy(value: string) {
-    return ['true', '1', 't', 'y', 'yes'].includes(value)
-}
 
 /** Safe nested lookup by dotted path, e.g. `deepGet(order, 'recipient.address.city')`. */
 export function deepGet<T = any>(data: any, path: string, defaultValue?: T): T {
@@ -35,12 +26,16 @@ function fromEnv(prefix: string): { [key: string]: string } {
     return result
 }
 
+/** One webhook delivery handed to this run: the parsed body, plus the trigger
+ * `id`, which is useful for correlating with the run log. */
 export interface WebhookPayload {
     id: string
     body: any
     headers: any
 }
 
+/** One entry from `PAN_CTX_RUN_TRIGGERS`, as Pandium hands it over — a webhook
+ * delivery's body isn't inline, just a `payload.file` path to read it from. */
 interface RunTrigger {
     id?: string | number
     mode?: string
@@ -109,7 +104,10 @@ export class Pandium {
         for (const trigger of this.runTriggers()) {
             if (!trigger.mode || trigger.mode !== 'webhook') continue
             const file = trigger.payload?.file
-            if (!file) continue
+            if (!file) {
+                logger.error(`webhook trigger ${trigger.id} has no payload file`)
+                continue
+            }
             try {
                 const body = fs.readFileSync(file, 'utf-8')
                 payloads.push({
@@ -146,7 +144,8 @@ export class Pandium {
      * thing that should be written there.
      */
     updateMetadata(metadata: any): void {
-        logger.info(`updating metadata with ${JSON.stringify(metadata)}`)
-        console.log(JSON.stringify(metadata))
+        const json = JSON.stringify(metadata)
+        logger.info(`updating metadata with ${json}`)
+        console.log(json)
     }
 }

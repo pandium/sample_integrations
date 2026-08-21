@@ -20,6 +20,7 @@ test('GorgiasAPI sets apiUrl and Authorization header from secrets', () => {
     const api = new GorgiasAPI(makePandium({ secrets: GORGIAS_SECRETS })) as any
     assert.equal(api.apiUrl, 'https://acme.gorgias.com/api')
     assert.equal(api.session.defaults.headers['Authorization'], 'Bearer gorgias-token-123')
+    assert.equal(api.session.defaults.auth, undefined) // no basic auth left anywhere
 })
 
 test('customerKey returns email or synthetic name/address key', () => {

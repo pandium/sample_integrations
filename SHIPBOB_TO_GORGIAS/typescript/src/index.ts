@@ -18,8 +18,7 @@ const run = async (mode: string | undefined, pandium: Pandium): Promise<any> => 
             return webhook.run(pandium)
 
         default:
-            // Normal mode (also covers 'init'): the scheduled ShipBob orders -> Gorgias
-            // customer sync.
+            // Normal mode: the scheduled ShipBob orders -> Gorgias customer sync.
             return cron.run(pandium)
     }
 }

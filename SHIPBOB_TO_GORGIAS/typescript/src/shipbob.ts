@@ -35,8 +35,7 @@ export function resolveBaseUrl(token: string): string {
 }
 
 /** `YYYY-MM-DDTHH:mm:ss.SSSSSS` — Date only has millisecond precision, so the
- * fractional part is padded with three zeros (mirrors Python's %f width without
- * claiming microsecond precision we don't have). */
+ * fractional part is padded with three zeros. */
 function formatNaive(d: Date): string {
     const iso = d.toISOString() // '...SSSZ'
     return iso.slice(0, -1).replace(/(\.\d{3})$/, '$1000')
@@ -67,8 +66,7 @@ export class ShipBobAPI implements ShipBobClient {
                 Authorization: `Bearer ${token}`,
             },
         })
-        // Mirrors urllib3's Retry(backoff_factor=3): F * 2**(retry-1) seconds between
-        // attempts, in ms. Only GET is ever called by this client.
+        // Exponential backoff: 3s, 6s, 12s, ... Only GET is ever called by this client.
         axiosRetry(session, {
             retries: 6,
             retryCondition: (err) => [429, 502, 503, 504].includes(err.response?.status ?? 0),
