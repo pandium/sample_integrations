@@ -23,23 +23,22 @@ typescript/
 └── test/                 both flows covered end to end; no network
 ```
 
-`lib.ts` is the file to read first — same role as `lib.py` in the Python implementation:
-`PAN_CFG_*`/`PAN_SEC_*` as plain maps, `PAN_CTX_*` as named methods, the metadata file read,
-and the single stdout write that hands metadata back to Pandium.
+`lib.ts` is the file to read first — the whole platform contract in one file: `PAN_CFG_*`/
+`PAN_SEC_*` as plain maps, `PAN_CTX_*` as named methods, the metadata file read, and the
+single stdout write that hands metadata back to Pandium.
 
-## TypeScript-specific notes
+## Implementation notes
 
-**No `SIGALRM`.** Node has no equivalent for an arbitrary in-process alarm, so the run-limit
-deadline in `cron.ts` is a `setTimeout`-based watchdog instead, injectable via `CronDeps` so
-tests can trigger it deterministically without waiting 9 real minutes.
+**The run-limit deadline** is a `setTimeout`-based watchdog in `cron.ts`, injectable via
+`CronDeps` so tests can trigger it deterministically without waiting 9 real minutes.
 
-**JWT issuer decoding needs no library.** Node's `Buffer` natively supports `base64url`, so
-`shipbob.ts`'s `resolveBaseUrl` decodes the token payload directly.
+**JWT issuer decoding** uses Node's `Buffer`, which natively supports `base64url` — no JWT
+library needed. `shipbob.ts`'s `resolveBaseUrl` decodes the token payload directly.
 
-**Date formatting avoids `Date` for display.** `gorgias.ts`'s date formatter (used for the
-customer sidebar) works on the raw ISO string with a regex instead of parsing into a `Date`
-object — JS `Date`'s local-time getters silently convert to the server's local timezone,
-which would be a bug waiting to happen against ShipBob's UTC-only timestamps.
+**Date formatting for the customer sidebar** works on the raw ISO string with a regex
+instead of parsing into a `Date` object, in `gorgias.ts` — JS `Date`'s local-time getters
+silently convert to the server's local timezone, which would be a bug waiting to happen
+against ShipBob's UTC-only timestamps.
 
 ## Prerequisites
 
