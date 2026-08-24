@@ -14,7 +14,6 @@ nodejs/
 ├── package.json     dependencies (axios, axios-retry, dotenv)
 ├── index.js          entry point; dispatches on run mode
 ├── lib.js             the Pandium runtime contract: config, secrets, context, metadata
-├── logger.js           stderr-only logger, scoped to the calling file
 ├── cron.js               Flow A — resumable order sync
 ├── webhook.js              Flow B — shipment status webhook -> ticket, with dedupe
 ├── shipbob.js                ShipBob client
@@ -24,9 +23,10 @@ nodejs/
 
 `lib.js` is the file to read first — the whole platform contract in one file: `PAN_CFG_*`/
 `PAN_SEC_*` as plain objects, `PAN_CTX_*` as named methods, the metadata file read, and the
-single stdout write that hands metadata back to Pandium. There's no `src/`/`build/` split —
-plain Node.js runs these files directly, so `run: node .` in `PANDIUM.yaml` just picks up
-`index.js` at the project root.
+single stdout write that hands metadata back to Pandium. It also configures the shared
+`log4js` logger that every other file gets its own named instance from. There's no
+`src/`/`build/` split — plain Node.js runs these files directly, so `run: node .` in
+`PANDIUM.yaml` just picks up `index.js` at the project root.
 
 ## Implementation notes
 

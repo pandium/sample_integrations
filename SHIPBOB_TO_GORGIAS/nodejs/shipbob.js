@@ -8,10 +8,10 @@
 
 import axios from 'axios'
 import axiosRetry from 'axios-retry'
+import log4js from 'log4js'
 
-import { getLogger } from './logger.js'
-
-const logger = getLogger(import.meta.url)
+// lib.js configures log4js; this just gets a logger named for this file.
+const logger = log4js.getLogger('shipbob')
 
 // ShipBob issues tokens from different auth hosts per environment; map each to its
 // matching API base URL. Anything unrecognized falls back to prod.

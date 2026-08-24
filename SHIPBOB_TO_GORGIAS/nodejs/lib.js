@@ -1,8 +1,18 @@
 import * as fs from 'fs'
+import log4js from 'log4js'
 
-import { getLogger } from './logger.js'
-
-const logger = getLogger(import.meta.url)
+// stdout is reserved for the final metadata JSON that Pandium reads back, so logs go
+// to stderr instead.
+log4js.configure({
+    appenders: {
+        stderr: {
+            type: 'stderr',
+            layout: { type: 'pattern', pattern: '[%d{yyyy-MM-dd hh:mm:ss:SSS}] [%c] %p: %m' },
+        },
+    },
+    categories: { default: { appenders: ['stderr'], level: 'info' } },
+})
+export const logger = log4js.getLogger('lib')
 
 /** Safe nested lookup by dotted path, e.g. `deepGet(order, 'recipient.address.city')`. */
 export function deepGet(data, path, defaultValue) {
