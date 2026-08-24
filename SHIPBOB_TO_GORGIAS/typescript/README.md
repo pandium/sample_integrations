@@ -15,7 +15,6 @@ typescript/
 ├── src/
 │   ├── index.ts          entry point; dispatches on run mode
 │   ├── lib.ts             the Pandium runtime contract: config, secrets, context, metadata
-│   ├── logger.ts           stderr-only logger, scoped to the calling file
 │   ├── cron.ts              Flow A — resumable order sync
 │   ├── webhook.ts            Flow B — shipment status webhook -> ticket, with dedupe
 │   ├── shipbob.ts             ShipBob client
@@ -25,7 +24,8 @@ typescript/
 
 `lib.ts` is the file to read first — the whole platform contract in one file: `PAN_CFG_*`/
 `PAN_SEC_*` as plain maps, `PAN_CTX_*` as named methods, the metadata file read, and the
-single stdout write that hands metadata back to Pandium.
+single stdout write that hands metadata back to Pandium. It also configures the shared
+`log4js` logger that every other file gets its own named instance from.
 
 ## Implementation notes
 

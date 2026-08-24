@@ -12,6 +12,7 @@
     "axios": "^1.19.0",
     "axios-retry": "^4.5.0",
     "dotenv": "^17.4.2",
+    "log4js": "^6.9.1",
     "typescript": "^7.0.2"
   },
   "devDependencies": {

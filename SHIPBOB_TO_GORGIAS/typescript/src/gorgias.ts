@@ -14,12 +14,13 @@
 
 import axios, { AxiosInstance } from 'axios'
 import axiosRetry from 'axios-retry'
+import log4js from 'log4js'
 
 import { deepGet } from './lib.js'
-import { getLogger } from './logger.js'
 import { Pandium } from './lib.js'
 
-const logger = getLogger(import.meta.url)
+// lib.js configures log4js; this just gets a logger named for this file.
+const logger = log4js.getLogger('gorgias')
 
 // Gorgias validates the shape of an email; mirror the check the older integration
 // used so we agree on which recipients get an email-keyed customer.

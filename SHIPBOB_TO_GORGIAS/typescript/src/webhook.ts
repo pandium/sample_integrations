@@ -22,11 +22,13 @@
  * handed to this module are already known to have come from ShipBob.
  */
 
+import log4js from 'log4js'
+
 import { GorgiasAPI, GorgiasClient } from './gorgias.js'
 import { deepGet, Pandium } from './lib.js'
-import { getLogger } from './logger.js'
 
-const logger = getLogger(import.meta.url)
+// lib.js configures log4js; this just gets a logger named for this file.
+const logger = log4js.getLogger('webhook')
 
 export const PRUNE_WINDOW_MS = 30 * 60 * 1000
 export const SHIPMENT_TAG = 'shipbob-shipment'
