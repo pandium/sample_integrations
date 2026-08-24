@@ -3,12 +3,14 @@ import * as dotenv from 'dotenv'
 // Logs go to stderr; stdout is reserved for the JSON metadata Pandium reads back.
 dotenv.config({ quiet: true })
 
+import log4js from 'log4js'
+
 import * as cron from './cron.js'
 import { Pandium } from './lib.js'
-import { getLogger } from './logger.js'
 import * as webhook from './webhook.js'
 
-const logger = getLogger(import.meta.url)
+// lib.js configures log4js; this just gets a logger named for this file.
+const logger = log4js.getLogger('index')
 
 const run = async (mode, pandium) => {
     switch (mode) {
