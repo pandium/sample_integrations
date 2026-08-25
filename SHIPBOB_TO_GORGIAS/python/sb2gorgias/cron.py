@@ -10,6 +10,13 @@ processed, and a SIGALRM handler writes that record before the hard kill. Exitin
 0 on timeout means the partial cursor is merged into metadata and the next run
 picks up from there.
 
+The two cursors resume differently. ``new_order_start_date`` climbs per order
+over an oldest-first query, so it is sound wherever the run stops.
+``updated_order_start_date`` is the minimum across every page, so it only holds
+once the query is exhausted — an unread page can carry an older update — and a
+run cut short leaves it where it started. Re-syncing what it covers again is
+harmless: customer writes are idempotent PUTs.
+
 """
 
 import logging
@@ -155,11 +162,11 @@ def run(pandium) -> dict:
     logger.info('Syncing updated ShipBob orders since %s', record['updated_order_start_date'])
     page = 1
     # Each page is sorted newest-first, but pages are not sorted relative to each
-    # other, so the cursor has to be the running minimum across every processed
-    # order — not whatever the last order of the last page happened to carry.
-    # Tracked separately from the record because every update date is, by
-    # construction, later than the starting cursor: folding the start value into
-    # the min would pin the cursor there forever.
+    # other, so the cursor is the minimum across every processed order — not
+    # whatever the last order of the last page happened to carry. Kept out of the
+    # record until the loop ends: every update date is, by construction, later
+    # than the starting cursor, so folding that in would pin the cursor there
+    # forever, and a partial minimum would sit newer than the pages still unread.
     oldest_update = None
     while True:
         orders = shipbob.get_updated_orders_page(updated_cursor, page)
@@ -173,8 +180,11 @@ def run(pandium) -> dict:
             update_date = shipbob.get_update_date(order, updated_cursor)[:23]
             if oldest_update is None or update_date < oldest_update:
                 oldest_update = update_date
-                record['updated_order_start_date'] = oldest_update
         page += 1
+
+    # Every page is in, so the minimum is final and safe to resume from.
+    if oldest_update is not None:
+        record['updated_order_start_date'] = oldest_update
 
     signal.alarm(0)  # made it — cancel the alarm; __main__ prints the record on return
     return record

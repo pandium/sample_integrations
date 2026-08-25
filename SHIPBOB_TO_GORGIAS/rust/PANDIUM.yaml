@@ -1,0 +1,59 @@
+version: 1.0
+base: rust:1.97
+build: cargo build --release
+run: ./target/release/sb2gorgias
+
+# Supplies the PAN_SEC_* credentials the clients read: SHIPBOB_ACCESS_TOKEN and
+# SHIPBOB_WEBHOOK_SECRET; GORGIAS-OAUTH_ACCESS_TOKEN and GORGIAS-OAUTH_ACCOUNT.
+# Both are OAuth2 connectors: Pandium runs the authorization flow when a tenant
+# connects and refreshes the tokens, so the integration only reads access tokens.
+connectors:
+  - shipbob
+  - gorgias-oauth
+
+configs:
+  schema:
+    properties:
+      order_start_date:
+        type: string
+        format: date
+      newest_order_first:
+        type: boolean
+        default: false
+    type: object
+  uischema:
+    elements:
+      - type: Section
+        label: Sync Orders Since
+        subtitle:
+          Set how far back the first sync reaches. Later syncs will pick up where the previous sync left off. Limited to the last 30 days.
+        elements:
+          - label: Sync orders since
+            scope: '#/properties/order_start_date'
+            type: Control
+            options:
+              trim: true
+      - type: Divider
+      - type: Section
+        label: Newest orders first?
+        subtitle: Check this box to order each customer's shipbob_orders sidebar list newest-first rather than oldest-first.
+        elements:
+          - scope: '#/properties/newest_order_first'
+            type: Control
+    type: VerticalLayout
+
+metadata_schema:
+  schema:
+    name: metadata_schema
+    properties:
+      # Cron-flow cursors: the point each order query resumes from next run.
+      new_order_start_date:
+        type: string
+      updated_order_start_date:
+        type: string
+      # Webhook-flow dedupe: "shipment_id:status" -> ISO timestamp it was
+      # ticketed, pruned to a 30-minute window on every run.
+      processed_events:
+        type: object
+        additionalProperties:
+          type: string

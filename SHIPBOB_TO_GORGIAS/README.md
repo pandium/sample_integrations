@@ -13,6 +13,7 @@ implementation declares the same connectors, configs, and metadata schema — on
 | Language | Notes |
 | --- | --- |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
+| [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
 
 More languages are on the way.

@@ -81,8 +81,8 @@ pipenv run pytest
 ```
 
 ```
-..........                                                               [100%]
-10 passed in 0.09s
+............                                                             [100%]
+12 passed in 0.11s
 ```
 
 `tests/helpers.py` builds a real `Pandium` object from a dict instead of the environment and
