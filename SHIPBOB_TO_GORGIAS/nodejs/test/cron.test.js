@@ -19,23 +19,45 @@ afterEach(() => {
     console.log = originalLog
 })
 
-/** Serves canned pages of new orders (no updated orders); records page numbers. */
+/**
+ * Serves canned pages for either half and records the pages asked for.
+ *
+ * `onPage` runs before a page is served, which is where a test stands in for
+ * the watchdog tripping or the API going away mid-query.
+ */
 class FakeShipBob {
-    constructor(newPages) {
+    constructor({ newPages = [], updatedPages = [], onPage } = {}) {
         this.newPages = newPages
-        this.pages = []
+        this.updatedPages = updatedPages
+        this.onPage = onPage ?? (() => {})
+        this.pages = { new: [], updated: [] }
+    }
+
+    _page(half, pages, page) {
+        this.pages[half].push(page)
+        this.onPage(half, page)
+        return pages[page - 1] ?? []
     }
 
     async getNewOrdersPage(_cursor, page) {
-        this.pages.push(page)
-        return this.newPages[page - 1] ?? []
+        return this._page('new', this.newPages, page)
     }
-    async getUpdatedOrdersPage(_cursor, _page) {
-        return []
+    async getUpdatedOrdersPage(_cursor, page) {
+        return this._page('updated', this.updatedPages, page)
     }
     getUpdateDate(order, _cursor) {
         return order.shipments[0].last_update_at
     }
+}
+
+/** A ShipBob-shaped timestamp `days` back — seven fractional digits, as the
+ * real API sends — inside clamp's 30-day window. */
+function ago(days) {
+    const d = new Date(Date.now() - days * 86400000)
+    const pad = (n) => String(n).padStart(2, '0')
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(
+        d.getUTCHours()
+    )}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.1234567+00:00`
 }
 
 test('clamp bounds a cursor to [now-30d, now]', () => {
@@ -49,23 +71,24 @@ test('clamp bounds a cursor to [now-30d, now]', () => {
 })
 
 test('run pages new orders until empty, batches one customer, advances cursor', async () => {
-    const pages = [
-        [
-            makeOrder(1, '2026-07-05T10:00:00.1234567+00:00', { email: 'jane@example.com' }),
-            makeOrder(2, '2026-07-06T10:00:00.1234567+00:00', { email: 'jane@example.com' }),
+    const shipbob = new FakeShipBob({
+        newPages: [
+            [
+                makeOrder(1, ago(6), { email: 'jane@example.com' }),
+                makeOrder(2, ago(5), { email: 'jane@example.com' }),
+            ],
         ],
-    ]
-    const shipbob = new FakeShipBob(pages)
+    })
     const gorgias = recordingGorgias()
 
     const record = await cron.run(
-        makePandium({ secrets: GORGIAS_SECRETS, config: { order_start_date: '2026-07-01' } }),
+        makePandium({ secrets: GORGIAS_SECRETS, config: { order_start_date: ago(20) } }),
         { shipbob, gorgias }
     )
 
-    assert.deepEqual(shipbob.pages, [1, 2]) // paged until the empty page
+    assert.deepEqual(shipbob.pages.new, [1, 2]) // paged until the empty page
     assert.equal(gorgias.log.create.length, 1) // both orders batch onto one customer
-    assert.equal(record.new_order_start_date, '2026-07-06T10:00:00.123456') // advanced to last order
+    assert.equal(record.new_order_start_date, ago(5).slice(0, 26)) // advanced to the last order
     const finalOrders = gorgias.log.update[gorgias.log.update.length - 1][1].data.pandium.shipbob_orders
     assert.deepEqual(
         finalOrders.map((o) => o.id).sort(),
@@ -74,35 +97,13 @@ test('run pages new orders until empty, batches one customer, advances cursor', 
 })
 
 test('run advances updated cursor to the oldest update seen across pages, not the last one processed', async () => {
-    const ago = (days) => {
-        const d = new Date(Date.now() - days * 86400000)
-        const pad = (n) => String(n).padStart(2, '0')
-        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}T${pad(
-            d.getUTCHours()
-        )}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.000+00:00`
-    }
-
-    class Updating {
-        constructor() {
-            this.pages = []
-            this.updatedPages = [
-                [makeOrder(1, ago(2), { email: 'j@x.com' }), makeOrder(2, ago(3), { email: 'j@x.com' })],
-                [makeOrder(3, ago(9), { email: 'j@x.com' }), makeOrder(4, ago(8), { email: 'j@x.com' })], // oldest update overall
-                [makeOrder(5, ago(4), { email: 'j@x.com' })], // newer again, after the oldest page
-            ]
-        }
-        async getNewOrdersPage(_c, _p) {
-            return []
-        }
-        async getUpdatedOrdersPage(_cursor, page) {
-            return this.updatedPages[page - 1] ?? []
-        }
-        getUpdateDate(order, _cursor) {
-            return order.shipments[0].last_update_at
-        }
-    }
-
-    const shipbob = new Updating()
+    const shipbob = new FakeShipBob({
+        updatedPages: [
+            [makeOrder(1, ago(2), { email: 'j@x.com' }), makeOrder(2, ago(3), { email: 'j@x.com' })],
+            [makeOrder(3, ago(9), { email: 'j@x.com' }), makeOrder(4, ago(8), { email: 'j@x.com' })], // oldest update overall
+            [makeOrder(5, ago(4), { email: 'j@x.com' })], // newer again, after the oldest page
+        ],
+    })
     const gorgias = recordingGorgias()
 
     const record = await cron.run(
@@ -110,10 +111,15 @@ test('run advances updated cursor to the oldest update seen across pages, not th
         { shipbob, gorgias }
     )
 
-    assert.equal(record.updated_order_start_date, ago(9).slice(0, 23)) // not order 5, the last one processed
+    assert.equal(record.updated_order_start_date, ago(9).slice(0, 23)) // not order 5, the last processed
 })
 
-test('run flushes the partial cursor and exits zero on timeout', async () => {
+test('timeout flushes the finished half and leaves the interrupted one', async () => {
+    // The two cursors resume differently. new_order_start_date climbs per order
+    // over an oldest-first query, so it is sound wherever the run stops.
+    // updated_order_start_date is the minimum across every page, so it only holds
+    // once the query is exhausted — an unread page can carry an older update —
+    // and a run cut short flushes the value it started with.
     class WatchdogExit extends Error {
         constructor(code) {
             super(`exit ${code}`)
@@ -130,39 +136,36 @@ test('run flushes the partial cursor and exits zero on timeout', async () => {
         throw new WatchdogExit(code)
     }
 
-    class Alarming {
-        async getNewOrdersPage(_cursor, page) {
-            if (page === 1) {
-                return [makeOrder(1, '2026-07-05T10:00:00.1234567+00:00', { email: 'j@x.com' })]
-            }
-            capturedOnTimeout?.() // trip the watchdog before page 2 is processed
-            return [makeOrder(2, '2026-07-06T10:00:00.1234567+00:00', { email: 'j@x.com' })]
-        }
-        async getUpdatedOrdersPage(_cursor, _page) {
-            return []
-        }
-        getUpdateDate(order, _cursor) {
-            return order.shipments[0].last_update_at
-        }
-    }
-
-    const shipbob = new Alarming()
+    const now = new Date()
+    const start = ago(20)
+    const shipbob = new FakeShipBob({
+        newPages: [[makeOrder(1, ago(6), { email: 'j@x.com' })]],
+        updatedPages: [
+            [makeOrder(2, ago(2), { email: 'j@x.com' })],
+            [makeOrder(3, ago(9), { email: 'j@x.com' })], // never read
+        ],
+        onPage: (half, page) => {
+            if (half === 'updated' && page === 2) capturedOnTimeout?.()
+        },
+    })
     const gorgias = recordingGorgias()
 
     await assert.rejects(
-        cron.run(makePandium({ secrets: GORGIAS_SECRETS, config: { order_start_date: '2026-07-01' } }), {
+        cron.run(makePandium({ secrets: GORGIAS_SECRETS, config: { order_start_date: start } }), {
             shipbob,
             gorgias,
             armWatchdog,
             exit,
+            now,
         }),
         (err) => {
             assert.ok(err instanceof WatchdogExit)
-            assert.equal(err.code, 0) // timed-out run still succeeds so progress is merged
+            assert.equal(err.code, 0) // a timed-out run still succeeds, so progress merges
             return true
         }
     )
 
     const flushed = JSON.parse(logged[logged.length - 1])
-    assert.equal(flushed.new_order_start_date, '2026-07-05T10:00:00.123456') // only order 1 processed
+    assert.equal(flushed.new_order_start_date, ago(6).slice(0, 26)) // that half finished
+    assert.equal(flushed.updated_order_start_date, cron.clamp(start, now).toISOString()) // this one did not
 })

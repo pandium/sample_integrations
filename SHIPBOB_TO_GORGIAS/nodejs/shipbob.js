@@ -65,15 +65,27 @@ export class ShipBobAPI {
         this.session = session
     }
 
-    /** GET one page of `/order`. Returns [] on error or empty page. */
+    /**
+     * GET one page of `/order`.
+     *
+     * Only an exhausted query answers []. The caller stops paging there and
+     * commits its cursor, so a failure — or a 200 carrying something other than
+     * a list — throws instead.
+     */
     async getOrders(params) {
+        let res
         try {
-            const res = await this.session.get(`${this.apiUrl}/order`, { params })
-            return Array.isArray(res.data) ? res.data : []
+            res = await this.session.get(`${this.apiUrl}/order`, { params })
         } catch (err) {
             logger.error(`ShipBob order fetch failed (${JSON.stringify(params)}): ${err}`)
-            return []
+            throw err
         }
+        const data = res.data
+        if (data === null || data === undefined) return [] // a page past the end can come back with no body
+        if (!Array.isArray(data)) {
+            throw new Error(`ShipBob answered /order (${JSON.stringify(params)}) with ${JSON.stringify(data)}`)
+        }
+        return data
     }
 
     /** One page of orders created since `startDate`, oldest first. */
