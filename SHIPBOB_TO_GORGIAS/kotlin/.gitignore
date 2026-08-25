@@ -1,0 +1,5 @@
+# Compiled artifacts and build output
+build/
+
+# Gradle's local caches and daemon state
+.gradle/
