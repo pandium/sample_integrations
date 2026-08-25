@@ -14,6 +14,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("io.github.oshai:kotlin-logging-jvm:8.0.4")
     runtimeOnly("ch.qos.logback:logback-classic:1.5.38")
+    testImplementation(kotlin("test"))
 }
 
 java {
@@ -23,7 +24,15 @@ java {
 }
 
 application {
-    mainClass = "MainKt"
+    mainClass = "sb2gorgias.MainKt"
+    // kotlin-logging announces itself on stdout when it initializes, and stdout belongs
+    // to Pandium's tenant metadata. Silence it here so `gradle run` matches the manifest's
+    // run command, which passes the same flag.
+    applicationDefaultJvmArgs = listOf("-Dkotlin-logging.logStartupMessage=false")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 tasks.register<Jar>("fatJar") {
@@ -31,7 +40,7 @@ tasks.register<Jar>("fatJar") {
     description = "Creates a fat JAR with all dependencies"
 
     manifest {
-        attributes["Main-Class"] = "MainKt"
+        attributes["Main-Class"] = "sb2gorgias.MainKt"
     }
 
     archiveClassifier.set("all")

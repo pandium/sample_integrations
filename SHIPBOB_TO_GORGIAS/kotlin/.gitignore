@@ -3,3 +3,10 @@ build/
 
 # Gradle's local caches and daemon state
 .gradle/
+
+# Local credentials and run state
+.env
+metadata.json
+
+# JetBrains stuff
+.idea

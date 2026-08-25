@@ -1,50 +1,53 @@
 version: 1.0
 base: kotlin:2.4.10
 build: gradle fatJar
-run: java -jar app/build/libs/app-all.jar
+# kotlin-logging announces itself on stdout when it initializes, and stdout is where
+# Pandium reads this run's tenant metadata. The flag keeps that channel clean.
+run: java -Dkotlin-logging.logStartupMessage=false -jar app/build/libs/app-all.jar
+
 configs:
   schema:
     properties:
-      free_text_config_1:
+      order_start_date:
         type: string
-      free_text_config_2:
-        type: string
-      boolean_1:
+        format: date
+      newest_order_first:
         type: boolean
-        default: true
-      boolean_2:
-        type: boolean
-      colors:
-        $ref: '#/metadata/dynamic_colors'
-
+        default: false
     type: object
   uischema:
     elements:
-      - label: Free Text Field 1
-        scope: '#/properties/free_text_config_1'
-        type: Control
-      - label: Free Text Field 2
-        scope: '#/properties/free_text_config_2'
-        type: Control
-      - label: Boolean 1
-        scope: '#/properties/boolean_1'
-        type: Control
-        admin: true
-      - label: Boolean 2
-        scope: '#/properties/boolean_2'
-        type: Control
-      - label: Dynamic colors
-        scope: '#/properties/colors'
-        type: Control
+      - type: Section
+        label: Sync Orders Since
+        subtitle:
+          Set how far back the first sync reaches. Later syncs will pick up where the previous sync left off. Limited to the last 30 days.
+        elements:
+          - label: Sync orders since
+            scope: '#/properties/order_start_date'
+            type: Control
+            options:
+              trim: true
+      - type: Divider
+      - type: Section
+        label: Newest orders first?
+        subtitle: Check this box to order each customer's shipbob_orders sidebar list newest-first rather than oldest-first.
+        elements:
+          - scope: '#/properties/newest_order_first'
+            type: Control
     type: VerticalLayout
+
 metadata_schema:
   schema:
     name: metadata_schema
     properties:
-      dynamic_colors:
-        type: array
-        items:
+      # Cron-flow cursors: the point each order query resumes from next run.
+      new_order_start_date:
+        type: string
+      updated_order_start_date:
+        type: string
+      # Webhook-flow dedupe: "shipment_id:status" -> ISO timestamp it was
+      # ticketed, pruned to a 30-minute window on every run.
+      processed_events:
+        type: object
+        additionalProperties:
           type: string
-        default: ['black', 'white']
-      random_number:
-        type: number
