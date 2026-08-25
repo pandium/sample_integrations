@@ -1,0 +1,134 @@
+/**
+ * ShipBob API client — reads orders for the cron sync.
+ *
+ * Auth is a single bearer token (`PAN_SEC_SHIPBOB_ACCESS_TOKEN`). The base URL is
+ * resolved from the token's issuer (`iss`) claim, so the same code targets prod,
+ * sandbox, or QA depending on which token the tenant connected.
+ */
+
+import axios, { AxiosInstance } from 'axios'
+import axiosRetry from 'axios-retry'
+import log4js from 'log4js'
+
+import { Pandium } from './lib.js'
+
+// lib.js configures log4js; this just gets a logger named for this file.
+const logger = log4js.getLogger('shipbob')
+
+// ShipBob issues tokens from different auth hosts per environment; map each to its
+// matching API base URL. Anything unrecognized falls back to prod.
+const AUTH_URL_TO_BASE_URL: { [iss: string]: string } = {
+    'https://authstage.shipbob.com': 'https://sandbox-api.shipbob.com/2026-01',
+    'https://auth.shipbob.com': 'https://api.shipbob.com/2026-01',
+}
+export const DEFAULT_BASE_URL = 'https://api.shipbob.com/2026-01'
+
+/** Decode the JWT payload and map its `iss` claim to an API base URL. */
+export function resolveBaseUrl(token: string): string {
+    try {
+        const payload = token.split('.')[1]
+        const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+        return AUTH_URL_TO_BASE_URL[claims.iss] ?? DEFAULT_BASE_URL
+    } catch (err) {
+        logger.error(`Could not resolve ShipBob base URL from token: ${err}`)
+        return DEFAULT_BASE_URL
+    }
+}
+
+/** `YYYY-MM-DDTHH:mm:ss.SSSSSS` — Date only has millisecond precision, so the
+ * fractional part is padded with three zeros. */
+function formatNaive(d: Date): string {
+    const iso = d.toISOString() // '...SSSZ'
+    return iso.slice(0, -1).replace(/(\.\d{3})$/, '$1000')
+}
+
+export interface ShipBobClient {
+    getNewOrdersPage(startDate: Date, page: number): Promise<any[]>
+    getUpdatedOrdersPage(startDate: Date, page: number): Promise<any[]>
+    getUpdateDate(order: any, startDate: Date): string
+}
+
+export class ShipBobAPI implements ShipBobClient {
+    private apiUrl: string
+    private session: AxiosInstance
+
+    constructor(pandium: Pandium) {
+        const token = pandium.secrets['shipbob_access_token']
+        if (!token) {
+            throw new Error('PAN_SEC_SHIPBOB_ACCESS_TOKEN is required')
+        }
+
+        this.apiUrl = resolveBaseUrl(token)
+
+        const session = axios.create({
+            headers: {
+                accept: 'application/json',
+                'content-type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+        })
+        // Exponential backoff: 3s, 6s, 12s, ... Only GET is ever called by this client.
+        axiosRetry(session, {
+            retries: 6,
+            retryCondition: (err) => [429, 502, 503, 504].includes(err.response?.status ?? 0),
+            retryDelay: (retryCount) => 3000 * 2 ** (retryCount - 1),
+        })
+        this.session = session
+    }
+
+    /**
+     * GET one page of `/order`.
+     *
+     * Only an exhausted query answers []. The caller stops paging there and
+     * commits its cursor, so a failure — or a 200 carrying something other than
+     * a list — throws instead.
+     */
+    private async getOrders(params: Record<string, any>): Promise<any[]> {
+        let res: any
+        try {
+            res = await this.session.get(`${this.apiUrl}/order`, { params })
+        } catch (err) {
+            logger.error(`ShipBob order fetch failed (${JSON.stringify(params)}): ${err}`)
+            throw err
+        }
+        const data = res.data
+        if (data === null || data === undefined) return [] // a page past the end can come back with no body
+        if (!Array.isArray(data)) {
+            throw new Error(`ShipBob answered /order (${JSON.stringify(params)}) with ${JSON.stringify(data)}`)
+        }
+        return data
+    }
+
+    /** One page of orders created since `startDate`, oldest first. */
+    async getNewOrdersPage(startDate: Date, page: number): Promise<any[]> {
+        return this.getOrders({ StartDate: startDate.toISOString(), Page: page, SortOrder: 'Oldest' })
+    }
+
+    /**
+     * One page of orders updated since `startDate`.
+     *
+     * ShipBob puts `last_update_at` on shipments, not orders, so we derive a
+     * per-order update timestamp and sort the page newest-first. Advancing the
+     * cursor to the oldest processed update keeps the sync conservative: a
+     * timed-out run never skips an update, at the cost of some reprocessing
+     * (which is harmless — customer writes are idempotent PUTs).
+     */
+    async getUpdatedOrdersPage(startDate: Date, page: number): Promise<any[]> {
+        const orders = await this.getOrders({ LastUpdateStartDate: startDate.toISOString(), Page: page })
+        const keyed = orders.map((order) => ({ order, key: this.getUpdateDate(order, startDate) }))
+        keyed.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0)) // newest first
+        return keyed.map(({ order }) => order)
+    }
+
+    /** The oldest shipment `last_update_at` on `order` that still falls after
+     * `startDate`; defaults to now when none qualify. */
+    getUpdateDate(order: any, startDate: Date): string {
+        const startStr = formatNaive(startDate)
+        let updateDate = formatNaive(new Date())
+        for (const shipment of order.shipments ?? []) {
+            const ts = shipment?.last_update_at
+            if (ts && startStr < ts && ts < updateDate) updateDate = ts
+        }
+        return updateDate
+    }
+}
