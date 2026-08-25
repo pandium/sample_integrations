@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use chrono::NaiveDateTime;
 use serde_json::{Value, json};
 
@@ -20,19 +20,24 @@ use crate::shipbob::Orders;
 
 // --- ShipBob ------------------------------------------------------------------
 
-/// Serves canned pages of orders and records which pages were asked for.
+/// Serves canned pages of orders and records which pages were asked for. Each
+/// half keeps its own page log, so asserting on one half's paging does not pick
+/// up the other's single empty page.
 #[derive(Default)]
 pub struct ShipBob {
     new_pages: Vec<Vec<Value>>,
     updated_pages: Vec<Vec<Value>>,
-    requested: RefCell<Vec<u32>>,
+    new_requested: RefCell<Vec<u32>>,
+    updated_requested: RefCell<Vec<u32>>,
+    /// A page that errors instead of answering, standing in for a ShipBob the
+    /// HTTP client's retries could not get a page out of.
+    failing_page: Option<u32>,
+
     /// The live cursor, when a test wants to see where it stood mid-sync.
     watched: RefCell<Option<Arc<Mutex<Cursors>>>>,
-    observed: RefCell<Vec<(u32, NaiveDateTime)>>,
+    new_observed: RefCell<Vec<(u32, NaiveDateTime)>>,
+    updated_observed: RefCell<Vec<(u32, NaiveDateTime)>>,
 }
-
-// Only the new-orders half is instrumented; the updated-orders half is served
-// from its own canned pages and observed through the cursor instead.
 
 impl ShipBob {
     pub fn with_new_orders(pages: Vec<Vec<Value>>) -> Self {
@@ -49,6 +54,12 @@ impl ShipBob {
         }
     }
 
+    /// Serve an error for `page` rather than a page of orders.
+    pub fn failing_on_page(mut self, page: u32) -> Self {
+        self.failing_page = Some(page);
+        self
+    }
+
     /// Record where the shared cursor stood each time a page is fetched — which
     /// is what the deadline watchdog would have flushed at that moment.
     pub fn watch(&self, cursors: Arc<Mutex<Cursors>>) {
@@ -57,35 +68,58 @@ impl ShipBob {
 
     /// The new-order pages the sync asked for, in order.
     pub fn new_order_pages_requested(&self) -> Vec<u32> {
-        self.requested.borrow().clone()
+        self.new_requested.borrow().clone()
     }
 
-    /// Where the shared cursor stood when the sync fetched `page`.
+    /// The updated-order pages the sync asked for, in order.
+    pub fn updated_order_pages_requested(&self) -> Vec<u32> {
+        self.updated_requested.borrow().clone()
+    }
+
+    /// Where the new-orders cursor stood when the sync fetched new-order `page`.
     pub fn cursor_when_page_fetched(&self, page: u32) -> Option<NaiveDateTime> {
-        self.observed
+        Self::sampled(&self.new_observed, page)
+    }
+
+    /// Where the updated-orders cursor stood when updated-order `page` was
+    /// fetched — the value a deadline flush would have written just then.
+    pub fn updated_cursor_when_page_fetched(&self, page: u32) -> Option<NaiveDateTime> {
+        Self::sampled(&self.updated_observed, page)
+    }
+
+    fn sampled(observed: &RefCell<Vec<(u32, NaiveDateTime)>>, page: u32) -> Option<NaiveDateTime> {
+        observed
             .borrow()
             .iter()
             .find(|(fetched, _)| *fetched == page)
             .map(|(_, cursor)| *cursor)
     }
 
-    fn page_of(pages: &[Vec<Value>], page: u32) -> Vec<Value> {
-        pages.get(page as usize - 1).cloned().unwrap_or_default()
+    fn page_of(&self, pages: &[Vec<Value>], page: u32) -> Result<Vec<Value>> {
+        if self.failing_page == Some(page) {
+            bail!("ShipBob is unavailable (page {page})");
+        }
+        Ok(pages.get(page as usize - 1).cloned().unwrap_or_default())
     }
 }
 
 impl Orders for ShipBob {
-    fn new_orders_page(&self, _start_date: NaiveDateTime, page: u32) -> Vec<Value> {
-        self.requested.borrow_mut().push(page);
+    fn new_orders_page(&self, _start_date: NaiveDateTime, page: u32) -> Result<Vec<Value>> {
+        self.new_requested.borrow_mut().push(page);
         if let Some(cursors) = self.watched.borrow().as_ref() {
             let cursor = cursors.lock().unwrap().new_orders;
-            self.observed.borrow_mut().push((page, cursor));
+            self.new_observed.borrow_mut().push((page, cursor));
         }
-        Self::page_of(&self.new_pages, page)
+        self.page_of(&self.new_pages, page)
     }
 
-    fn updated_orders_page(&self, _start_date: NaiveDateTime, page: u32) -> Vec<Value> {
-        Self::page_of(&self.updated_pages, page)
+    fn updated_orders_page(&self, _start_date: NaiveDateTime, page: u32) -> Result<Vec<Value>> {
+        self.updated_requested.borrow_mut().push(page);
+        if let Some(cursors) = self.watched.borrow().as_ref() {
+            let cursor = cursors.lock().unwrap().updated_orders;
+            self.updated_observed.borrow_mut().push((page, cursor));
+        }
+        self.page_of(&self.updated_pages, page)
     }
 }
 

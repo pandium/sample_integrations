@@ -111,7 +111,7 @@ cargo build --release
 
 ## Running the tests
 
-Five tests, one per behaviour worth understanding before you copy this sample. They run
+Six tests, one per behaviour worth understanding before you copy this sample. They run
 both flows end to end with no network access and no credentials:
 
 ```bash
@@ -119,14 +119,15 @@ cargo test
 ```
 
 ```
-running 5 tests
+running 6 tests
 test cron::tests::the_sync_pages_until_empty_and_keeps_the_cursor_current_as_it_goes ... ok
 test cron::tests::the_updated_cursor_lands_on_the_oldest_update_across_every_page ... ok
+test cron::tests::a_page_that_fails_to_fetch_ends_the_run_rather_than_committing_a_cursor ... ok
 test webhook::tests::a_delivery_opens_a_ticket_and_writes_only_processed_events ... ok
 test webhook::tests::a_repeated_status_is_dropped_but_the_next_status_still_tickets ... ok
 test webhook::tests::a_recipient_with_no_email_gets_a_customer_keyed_on_their_address ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
 `src/fakes.rs` implements the same `Orders` and `Helpdesk` traits the real clients do, so
@@ -238,4 +239,6 @@ its own by flipping `PAN_CTX_RUN_MODE` to `webhook` in `.env` and running the bi
   whole run is lost.
 - Every fallible path returns `anyhow::Result`, and `main` turns an error into a non-zero
   exit with nothing on stdout — which leaves the tenant's stored metadata exactly as the
-  last successful run left it.
+  last successful run left it. `Orders` returns `Result<Vec<Value>>` for that reason —
+  an exhausted query (commit the cursor) and a failed fetch (commit nothing) have to
+  stay distinguishable.

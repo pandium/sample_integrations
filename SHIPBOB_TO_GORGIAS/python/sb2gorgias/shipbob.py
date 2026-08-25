@@ -57,15 +57,24 @@ class ShipBobAPI:
         self._session = session
 
     def _get_orders(self, params: dict) -> list:
-        """GET one page of ``/order``. Returns [] on error or empty page."""
+        """GET one page of ``/order``.
+
+        Only an exhausted query answers []. The caller stops paging there and
+        commits its cursor, so a failure — or a 200 carrying something other than
+        a list — raises instead.
+        """
         res = self._session.get(f'{self.api_url}/order', params=params)
         try:
             res.raise_for_status()
         except Exception as err:
             logger.error('ShipBob order fetch failed (%s): %s', params, err)
-            return []
+            raise
         data = res.json()
-        return data if isinstance(data, list) else []
+        if data is None:  # a page past the end can come back with no body
+            return []
+        if not isinstance(data, list):
+            raise RuntimeError(f'ShipBob answered /order ({params}) with {data!r}')
+        return data
 
     def get_new_orders_page(self, start_date: datetime, page: int) -> list:
         """One page of orders created since ``start_date``, oldest first."""

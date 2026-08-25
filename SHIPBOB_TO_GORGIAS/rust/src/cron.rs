@@ -12,6 +12,8 @@
 //! so the next run reads the partial cursor and picks up from there. A run that
 //! hits Pandium's own limit instead is marked **Failed (Timeout)** and writes
 //! nothing.
+//!
+//! What a partial run may commit differs per half; see [`Cursors`].
 
 use std::collections::HashMap;
 use std::process;
@@ -41,14 +43,18 @@ const MAX_ORDERS_TO_SYNC: usize = 10;
 
 /// The point each of the two order queries resumes from.
 ///
-/// The sync keeps this current as every order is processed, which is what makes
-/// the flow restartable: whichever way the run ends, the cursor names the last
-/// order the sync reached.
+/// The two halves are written at different times, because their queries order
+/// results differently:
 ///
-/// It tracks the orders the sync *attempted*, not the orders Gorgias accepted.
-/// `process_order` logs a Gorgias failure and moves on, and the cursor
-/// advances past that order with the rest — one unreachable customer costs that
-/// customer's order rather than the remainder of the backlog.
+/// * `new_orders` is fetched oldest-first, so `created_date` climbs as the sync
+///   goes. It advances per order and is sound to flush at any moment.
+/// * `updated_orders` is the *minimum* update across the whole result set, which
+///   is not known until the last page is read. It is written once the loop ends,
+///   so a run cut short leaves it where the run found it.
+///
+/// Either way it tracks orders *attempted*, not orders Gorgias accepted:
+/// `process_order` logs a write failure and moves on, so one unreachable
+/// customer costs that customer's order rather than the rest of the backlog.
 #[derive(Debug, Clone, Copy)]
 pub struct Cursors {
     pub new_orders: NaiveDateTime,
@@ -106,7 +112,7 @@ pub fn run(pandium: &Pandium) -> Result<Value> {
     let gorgias = Gorgias::new(pandium)?;
     let newest_first = pandium.config_flag("newest_order_first");
 
-    sync(&shipbob, &gorgias, &cursors, newest_first, now);
+    sync(&shipbob, &gorgias, &cursors, newest_first, now)?;
 
     // Reached the end in time; the watchdog dies with the process on return.
     let cursors = *cursors.lock().unwrap();
@@ -134,6 +140,11 @@ fn flush_at_deadline(cursors: Arc<Mutex<Cursors>>, deadline: Duration) {
 
 /// Run both halves of the sync, advancing `cursors` as each order is processed.
 ///
+/// A failed ShipBob fetch returns `Err`, ending the run without writing
+/// metadata, so the next run resumes from the last cursor a completed run
+/// stored. Re-syncing what it covers again is harmless: the customer write is an
+/// idempotent PUT.
+///
 /// Split out from [`run`] so it can be driven by test doubles: everything it
 /// touches arrives through the two traits.
 pub fn sync(
@@ -142,7 +153,7 @@ pub fn sync(
     cursors: &Mutex<Cursors>,
     newest_first: bool,
     now: NaiveDateTime,
-) {
+) -> Result<()> {
     // Orders for each customer batch onto a single record.
     let mut customers = HashMap::new();
 
@@ -151,7 +162,7 @@ pub fn sync(
     let start = cursors.lock().unwrap().new_orders;
     log::info!("syncing new ShipBob orders since {}", dates::iso(start));
     for page in 1.. {
-        let orders = shipbob.new_orders_page(start, page);
+        let orders = shipbob.new_orders_page(start, page)?;
         if orders.is_empty() {
             break;
         }
@@ -165,16 +176,16 @@ pub fn sync(
     }
 
     // Updated orders are sorted newest-first within a page but not across pages,
-    // so the cursor has to be the running *minimum* over every order processed —
-    // not whatever the last one happened to carry. Tracked separately from the
-    // cursor because every update is by construction later than the starting
-    // point: folding that starting value into the minimum would pin the cursor
-    // there forever.
+    // so the cursor is the *minimum* over every order processed — not whatever
+    // the last one happened to carry. Kept out of `cursors` until the loop ends:
+    // every update is by construction later than the starting point, so folding
+    // that in would pin the cursor there forever, and a partial minimum would
+    // sit newer than the pages still unread.
     let start = cursors.lock().unwrap().updated_orders;
     log::info!("syncing updated ShipBob orders since {}", dates::iso(start));
     let mut oldest_update: Option<NaiveDateTime> = None;
     for page in 1.. {
-        let orders = shipbob.updated_orders_page(start, page);
+        let orders = shipbob.updated_orders_page(start, page)?;
         if orders.is_empty() {
             break;
         }
@@ -185,10 +196,16 @@ pub fn sync(
             let updated = crate::shipbob::update_date(order, start, now);
             if oldest_update.is_none_or(|oldest| updated < oldest) {
                 oldest_update = Some(updated);
-                cursors.lock().unwrap().updated_orders = updated;
             }
         }
     }
+
+    // Every page is in, so the minimum is final and safe to resume from.
+    if let Some(oldest) = oldest_update {
+        cursors.lock().unwrap().updated_orders = oldest;
+    }
+
+    Ok(())
 }
 
 /// Find-or-create the order's Gorgias customer, then write their updated
@@ -314,8 +331,12 @@ mod tests {
 
     /// Run the sync the way a tenant with the default settings would: oldest
     /// first, and a `now` comfortably later than every timestamp in the fixtures.
-    fn run_sync(shipbob: &dyn Orders, gorgias: &dyn Helpdesk, cursors: &Mutex<Cursors>) {
-        sync(shipbob, gorgias, cursors, false, at("2026-07-20T00:00:00"));
+    fn run_sync(
+        shipbob: &dyn Orders,
+        gorgias: &dyn Helpdesk,
+        cursors: &Mutex<Cursors>,
+    ) -> Result<()> {
+        sync(shipbob, gorgias, cursors, false, at("2026-07-20T00:00:00"))
     }
 
     #[test]
@@ -330,7 +351,7 @@ mod tests {
         let cursors = cursors_from("2026-07-01");
         shipbob.watch(Arc::clone(&cursors));
 
-        run_sync(&shipbob, &gorgias, &cursors);
+        run_sync(&shipbob, &gorgias, &cursors).expect("every page answers");
 
         assert_eq!(shipbob.new_order_pages_requested(), [1, 2, 3]); // until empty
 
@@ -367,12 +388,45 @@ mod tests {
             vec![updated(5, 16)],                 // newer again, after the oldest page
         ]);
         let cursors = cursors_from("2026-07-01");
+        shipbob.watch(Arc::clone(&cursors));
 
-        run_sync(&shipbob, &RecordingGorgias::new(&[]), &cursors);
+        run_sync(&shipbob, &RecordingGorgias::new(&[]), &cursors).expect("every page answers");
 
         assert_eq!(
             cursors.lock().unwrap().as_metadata()["updated_order_start_date"],
             "2026-07-11T00:00:00" // not order 5, the last one processed
         );
+
+        // Until the last page is in the minimum is provisional, so a flush
+        // partway through writes the value the run started with.
+        for page in 1..=3 {
+            assert_eq!(
+                shipbob.updated_cursor_when_page_fetched(page).map(dates::iso),
+                Some("2026-07-01T00:00:00".to_string()),
+                "the cursor moved while page {page} was still outstanding"
+            );
+        }
+    }
+
+    #[test]
+    fn a_page_that_fails_to_fetch_ends_the_run_rather_than_committing_a_cursor() {
+        // A page that errors has to stay distinguishable from the empty page
+        // that ends the loop, or the run would stop early and commit a cursor
+        // for pages it never read.
+        let updated = |id, day| {
+            fakes::order_updated_on(id, &format!("2026-07-{day:02}T00:00:00Z"), "j@x.com")
+        };
+        let shipbob = fakes::ShipBob::with_updated_orders(vec![
+            vec![updated(1, 18)],
+            vec![updated(2, 11)], // never read: the fetch fails first
+        ])
+        .failing_on_page(2);
+        let cursors = cursors_from("2026-07-01");
+
+        let result = run_sync(&shipbob, &RecordingGorgias::new(&[]), &cursors);
+
+        assert!(result.is_err(), "a failed fetch is not an exhausted query");
+        // Stopped at the failure rather than paging on.
+        assert_eq!(shipbob.updated_order_pages_requested(), [1, 2]);
     }
 }

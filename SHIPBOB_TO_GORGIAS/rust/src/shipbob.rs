@@ -15,7 +15,7 @@
 use std::cmp::Reverse;
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::{NaiveDateTime, Utc};
@@ -197,11 +197,12 @@ impl Shipment {
 /// The slice of ShipBob the cron flow depends on. Narrow enough that the tests
 /// can serve canned pages without a network or a token.
 pub trait Orders {
-    /// One page of orders created since `start_date`, oldest first.
-    fn new_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Vec<Value>;
+    /// One page of orders created since `start_date`, oldest first. Only an
+    /// exhausted query answers with an empty page; a failure is an `Err`.
+    fn new_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Result<Vec<Value>>;
 
     /// One page of orders updated since `start_date`, newest update first.
-    fn updated_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Vec<Value>;
+    fn updated_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Result<Vec<Value>>;
 }
 
 pub struct ShipBob {
@@ -218,23 +219,26 @@ impl ShipBob {
         })
     }
 
-    /// GET one page of `/order`. A failure ends the loop that calls this with
-    /// the cursor untouched, so the next run retries the same page rather than
-    /// skipping past it.
-    fn orders(&self, query: &[(&str, String)]) -> Vec<Value> {
-        match self.http.get("/order", query) {
-            Ok(Value::Array(orders)) => orders,
-            Ok(_) => Vec::new(),
-            Err(err) => {
-                log::error!("ShipBob order fetch failed ({query:?}): {err:#}");
-                Vec::new()
-            }
+    /// GET one page of `/order`.
+    ///
+    /// The caller stops paging on an empty page and commits its cursor there, so
+    /// only an exhausted query may answer with one.
+    fn orders(&self, query: &[(&str, String)]) -> Result<Vec<Value>> {
+        let page = self
+            .http
+            .get("/order", query)
+            .with_context(|| format!("fetching ShipBob orders ({query:?})"))?;
+        match page {
+            Value::Array(orders) => Ok(orders),
+            // A page past the end can arrive with no body, which reads as null.
+            Value::Null => Ok(Vec::new()),
+            other => bail!("ShipBob answered /order ({query:?}) with {other}"),
         }
     }
 }
 
 impl Orders for ShipBob {
-    fn new_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Vec<Value> {
+    fn new_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Result<Vec<Value>> {
         self.orders(&[
             ("StartDate", dates::iso(start_date)),
             ("Page", page.to_string()),
@@ -242,11 +246,11 @@ impl Orders for ShipBob {
         ])
     }
 
-    fn updated_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Vec<Value> {
+    fn updated_orders_page(&self, start_date: NaiveDateTime, page: u32) -> Result<Vec<Value>> {
         let mut orders = self.orders(&[
             ("LastUpdateStartDate", dates::iso(start_date)),
             ("Page", page.to_string()),
-        ]);
+        ])?;
         // ShipBob has no sort option for last-update, so order the page here.
         // Newest-first plus a cursor that only ever moves to the *oldest* update
         // seen keeps the sync conservative: a run cut short never skips an
@@ -254,7 +258,7 @@ impl Orders for ShipBob {
         // the customer write is an idempotent PUT).
         let now = Utc::now().naive_utc();
         orders.sort_by_key(|order| Reverse(update_date(order, start_date, now)));
-        orders
+        Ok(orders)
     }
 }
 
