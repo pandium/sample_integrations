@@ -14,6 +14,13 @@
  * The deadline is an injectable setTimeout-based watchdog (see `armWatchdog`/`exit`
  * on CronDeps — the default uses a real timer and process.exit; tests substitute
  * both to trigger the timeout deterministically).
+ *
+ * The two cursors resume differently. `new_order_start_date` climbs per order
+ * over an oldest-first query, so it is sound wherever the run stops.
+ * `updated_order_start_date` is the minimum across every page, so it only holds
+ * once the query is exhausted — an unread page can carry an older update — and a
+ * run cut short leaves it where it started. Re-syncing what it covers again is
+ * harmless: customer writes are idempotent PUTs.
  */
 
 import log4js from 'log4js'
@@ -177,11 +184,12 @@ export async function run(pandium: Pandium, deps: CronDeps = {}): Promise<Record
         logger.info(`Syncing updated ShipBob orders since ${record.updated_order_start_date}`)
         page = 1
         // Each page is sorted newest-first, but pages are not sorted relative to each
-        // other, so the cursor has to be the running minimum across every processed
-        // order — not whatever the last order of the last page happened to carry.
-        // Tracked separately from the record because every update date is, by
-        // construction, later than the starting cursor: folding the start value into
-        // the min would pin the cursor there forever.
+        // other, so the cursor is the minimum across every processed order — not
+        // whatever the last order of the last page happened to carry. Kept out of
+        // the record until the loop ends: every update date is, by construction,
+        // later than the starting cursor, so folding that in would pin the cursor
+        // there forever, and a partial minimum would sit newer than the pages
+        // still unread.
         let oldestUpdate: string | null = null
         while (true) {
             const orders = await shipbob.getUpdatedOrdersPage(updatedCursor, page)
@@ -194,10 +202,14 @@ export async function run(pandium: Pandium, deps: CronDeps = {}): Promise<Record
                 const updateDate = shipbob.getUpdateDate(order, updatedCursor).slice(0, 23)
                 if (oldestUpdate === null || updateDate < oldestUpdate) {
                     oldestUpdate = updateDate
-                    record.updated_order_start_date = oldestUpdate
                 }
             }
             page += 1
+        }
+
+        // Every page is in, so the minimum is final and safe to resume from.
+        if (oldestUpdate !== null) {
+            record.updated_order_start_date = oldestUpdate
         }
 
         watchdog.cancel() // made it — no timeout to flush
