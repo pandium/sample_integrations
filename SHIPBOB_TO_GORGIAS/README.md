@@ -15,7 +15,6 @@ implementation declares the same connectors, configs, and metadata schema — on
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
 | [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
-| [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
 
 More languages are on the way.
