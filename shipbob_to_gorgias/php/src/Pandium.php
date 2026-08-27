@@ -11,10 +11,9 @@ use stdClass;
 use Throwable;
 
 /**
- * Everything Pandium hands to an integration at runtime. `config` (`PAN_CFG_*`) and
- * `secrets` (`PAN_SEC_*`) hold arbitrary keys defined per integration and are exposed as
- * plain arrays. `context` (`PAN_CTX_*`) is controlled by Pandium, so its values are
- * surfaced through named methods.
+ * Everything Pandium hands to an integration at runtime: `config` (`PAN_CFG_*`) and
+ * `secrets` (`PAN_SEC_*`) are per-integration keys exposed as plain arrays; `context`
+ * (`PAN_CTX_*`) is set by Pandium and surfaced through named methods.
  */
 final class Pandium
 {
@@ -27,7 +26,7 @@ final class Pandium
      * @param array<string, string> $secrets
      * @param array<string, string> $context
      */
-    private function __construct(
+    public function __construct(
         public readonly array $config,
         public readonly array $secrets,
         private readonly array $context,
@@ -46,11 +45,8 @@ final class Pandium
     }
 
     /**
-     * Collect environment variables starting with $prefix, stripping the prefix and
-     * lower-casing the remaining key.
-     *
-     * Reads getenv() rather than $_ENV, which is only populated when the `variables_order`
-     * ini setting includes `E` - php.ini-production and php.ini-development both omit it.
+     * Environment variables starting with $prefix, with the prefix stripped and the key
+     * lowercased.
      *
      * @return array<string, string>
      */
@@ -66,6 +62,15 @@ final class Pandium
         return $items;
     }
 
+    /**
+     * A `PAN_CFG_*` checkbox as a bool. Configs arrive as strings, so an unchecked box is
+     * the string `'false'`, which PHP would otherwise treat as truthy.
+     */
+    public function configFlag(string $key): bool
+    {
+        return strtolower($this->config[$key] ?? '') === 'true';
+    }
+
     /** The run mode for this invocation (e.g. `init`, `webhook`). */
     public function runMode(): ?string
     {
@@ -73,9 +78,7 @@ final class Pandium
     }
 
     /**
-     * The triggers that caused this run, parsed from JSON. Relevant for webhook
-     * invocations, where each trigger's `payload.file` names a file holding the raw
-     * webhook body.
+     * The triggers that caused this run, parsed from JSON.
      *
      * @return list<array<string, mixed>>
      */
@@ -96,24 +99,29 @@ final class Pandium
     }
 
     /**
-     * The webhook payloads for this run: each trigger's headers and parsed body, read from
-     * the file its `payload.file` names. Relevant for webhook invocations.
+     * The webhook deliveries bundled into this run. Pandium debounces triggers per tenant,
+     * so one run may carry several; each trigger's `payload.file` names the raw body
+     * Pandium wrote to disk, read back and parsed here.
      *
-     * @return list<array{headers: mixed, body: mixed}>
+     * @return list<array{id: string, headers: mixed, body: mixed}>
      */
     public function webhookPayloads(): array
     {
         $payloads = [];
         foreach ($this->runTriggers() as $trigger) {
-            if (($trigger['mode'] ?? null) !== 'webhook') {
+            if (($trigger['source'] ?? null) !== 'webhook') {
                 continue;
             }
+            $id = (string) ($trigger['id'] ?? '');
             $file = $trigger['payload']['file'] ?? null;
             if ($file === null) {
+                $this->logger->warning("webhook trigger {$id} has no payload file");
+
                 continue;
             }
             try {
                 $payloads[] = [
+                    'id' => $id,
                     'headers' => $trigger['payload']['headers'] ?? null,
                     'body' => self::readJsonFile($file),
                 ];
@@ -148,9 +156,8 @@ final class Pandium
     }
 
     /**
-     * Merge $metadata into the tenant metadata that the next run reads back. Pandium reads
-     * the last non-empty line of stdout as the metadata, so anything printed to stdout
-     * after this call replaces it.
+     * Merge $metadata into the tenant metadata the next run reads back. Pandium takes the
+     * last non-empty line of stdout as the metadata, so nothing else may print there.
      */
     public function updateMetadata(array|object $metadata): void
     {

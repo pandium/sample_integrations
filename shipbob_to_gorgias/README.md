@@ -14,6 +14,7 @@ and `run` lines of its `PANDIUM.yaml` differ.
 | --- | --- |
 | [Kotlin](kotlin/) | Gradle, `kotlinx.serialization`, `java.net.http`, `kotlin.test` |
 | [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
+| [PHP](php/) | `composer`, `guzzle`, `phpunit` |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
 | [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
