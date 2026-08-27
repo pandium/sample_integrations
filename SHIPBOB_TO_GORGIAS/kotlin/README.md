@@ -295,9 +295,12 @@ its own by flipping `PAN_CTX_RUN_MODE` to `webhook` in `.env` and running `gradl
   the two APIs and the settings form send RFC 3339 with an offset, the same without one,
   and a bare `2026-07-01`; one `DateTimeFormatter` with optional sections plus `parseBest`
   covers all three.
-- `ApiClient` in `Http.kt` retries 429, 502, 503, and 504 with a doubling backoff. Pandium
-  does not retry a failed run on its own, so a transient rate limit has to be absorbed
-  there or the whole run is lost.
+- `ApiClient` in `Http.kt` retries 429, 502, 503, and 504. Pandium does not retry a failed
+  run on its own, so a transient rate limit has to be absorbed there or the whole run is
+  lost. A response carrying `Retry-After` sets the wait — the doubling backoff is only the
+  fallback for one that does not — clamped to `MAX_RETRY_AFTER`, because a client that
+  sleeps past Pandium's run limit never reaches the stdout write that ends the run
+  successfully.
 - `CustomerRecord` in `Cron.kt` rebuilds the customer payload rather than editing what
   Gorgias sent back. `JsonObject` is immutable, which turns out to be the right shape
   anyway: `data` keys the integration does not own are copied across untouched, and a

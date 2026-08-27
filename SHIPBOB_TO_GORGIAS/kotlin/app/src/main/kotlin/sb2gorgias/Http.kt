@@ -6,7 +6,12 @@ import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.Instant
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import kotlin.jvm.optionals.getOrNull
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 
@@ -23,6 +28,32 @@ private val RETRY_STATUSES = setOf(429, 502, 503, 504)
  * so a transient 429 has to be absorbed here or the whole run is lost.
  */
 private const val MAX_ATTEMPTS = 6
+
+/**
+ * The longest a `Retry-After` is honoured for.
+ */
+private val MAX_RETRY_AFTER = 60.seconds
+
+/**
+ * How long [response] asked the client to wait, or `null` if it did not ask — which is
+ * also the answer for a header this does not understand, since the doubling backoff is a
+ * safe thing to fall back on.
+ *
+ * RFC 9110 lets `Retry-After` carry either a number of seconds or an HTTP date. Both APIs
+ * send the first; the second is here because it costs three lines.
+ */
+private fun retryAfter(response: HttpResponse<*>): Duration? {
+    val header = response.headers().firstValue("retry-after").getOrNull()?.trim() ?: return null
+    val seconds =
+        header.toLongOrNull()
+            ?: runCatching {
+                ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toEpochSecond() -
+                    Instant.now().epochSecond
+            }.getOrNull()
+            ?: return null
+    // A date that has already passed reads as a negative wait, which means "now".
+    return seconds.coerceIn(0, MAX_RETRY_AFTER.inWholeSeconds).seconds
+}
 
 /**
  * A very small JSON-over-HTTP client, shared by the two API clients.
@@ -80,8 +111,9 @@ class ApiClient(
             val status = response.statusCode()
 
             if (status in RETRY_STATUSES && attempt < MAX_ATTEMPTS - 1) {
-                logger.warn { "HTTP $status from ${request.uri()}; retrying in $wait (attempt ${attempt + 1})" }
-                Thread.sleep(wait.inWholeMilliseconds)
+                val pause = retryAfter(response) ?: wait
+                logger.warn { "HTTP $status from ${request.uri()}; retrying in $pause (attempt ${attempt + 1})" }
+                Thread.sleep(pause.inWholeMilliseconds)
                 wait *= 2
                 return@repeat
             }
