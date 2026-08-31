@@ -16,6 +16,7 @@ implementation declares the same connectors, configs, and metadata schema — on
 | [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
 | [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
+| [Go](go/) | stdlib only — `net/http`, `encoding/json`, `log/slog` |
 
 More languages are on the way.
 
