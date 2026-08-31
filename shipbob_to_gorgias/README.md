@@ -12,6 +12,7 @@ and `run` lines of its `PANDIUM.yaml` differ.
 
 | Language | Notes |
 | --- | --- |
+| [Go](go/) | stdlib only — `net/http`, `encoding/json`, `log/slog` |
 | [Kotlin](kotlin/) | Gradle, `kotlinx.serialization`, `java.net.http`, `kotlin.test` |
 | [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
