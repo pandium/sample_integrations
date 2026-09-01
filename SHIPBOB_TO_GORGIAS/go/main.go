@@ -2,34 +2,40 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"strings"
 )
 
-var mainLogger = newLogger("main")
+func getPandiumIntegrationsMode(ctx *Context) string {
+	return ctx.Item.kv.items["run_mode"].(string)
+}
 
-// run's business logic varies depending on the run mode.
-func run(mode string, pandium *Pandium) (map[string]any, error) {
-	switch mode {
-	case "webhook":
-		// Webhook mode: ShipBob order webhook deliveries (Pandium debounces them
-		// into one run) -> a Gorgias ticket per shipment status not seen yet.
-		return webhookRun(pandium)
-
-	default:
-		// Normal mode: the scheduled ShipBob orders -> Gorgias customer sync.
-		return cronRun(pandium)
+func logEnv() {
+	for _, e := range os.Environ() {
+		pair := strings.SplitN(e, "=", 2)
+		log.Println(pair[0], pair[1])
 	}
 }
 
 func main() {
-	pandium := NewPandiumFromEnv()
+	config := NewConfigFromEnv()
+	secrets := NewSecretsFromEnv()
+	context := NewContextFromEnv()
 
-	mainLogger.Info(fmt.Sprintf("Syncing ShipBob to Gorgias; this run is in mode: %s", pandium.RunMode()))
+	runMode := getPandiumIntegrationsMode(context)
 
-	metadata, err := run(pandium.RunMode(), pandium)
-	if err != nil {
-		mainLogger.Error(fmt.Sprintf("run failed: %s", err))
-		os.Exit(1)
-	}
-	pandium.UpdateMetadata(metadata)
+	fmt.Println("This run is in mode: ", runMode)
+
+	log.Println("------------------------CONFIG------------------------")
+	log.Println(config.Item.kv.repr())
+
+	log.Println("------------------------SECRET------------------------")
+	log.Println(secrets.Item.kv.repr())
+
+	log.Println("------------------------CONTEXT------------------------")
+	log.Println(context.Item.kv.repr())
+
+	log.Println("------------------------ENV----------------------------")
+	logEnv()
 }
