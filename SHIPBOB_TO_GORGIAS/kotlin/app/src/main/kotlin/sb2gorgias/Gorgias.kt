@@ -13,28 +13,12 @@ import kotlinx.serialization.json.putJsonObject
 private val logger = KotlinLogging.logger {}
 
 /**
- * Gorgias validates the shape of an email before it will store it; mirror that check so
- * the two systems agree on which recipients get an email-keyed customer and which fall
- * back to a synthetic key. [Regex.matches] anchors on its own, so the pattern carries no
- * `^` or `$`.
- */
-private val EMAIL =
-    Regex(
-        """([-!#-'*+/-9=?A-Z^-~]+(\.[-!#-'*+/-9=?A-Z^-~]+)*|"([\]!#-\[^-~ \t]|(\\[\t -~]))+")""" +
-            """@([-!#-'*+/-9=?A-Z^-~]+(\.[-!#-'*+/-9=?A-Z^-~]+)*|\[[\t -Z^-~]*])""",
-    )
-
-/** Whether Gorgias would accept [email] as an email address. */
-fun isValidEmail(email: String): Boolean = !email.contains(".@") && EMAIL.matches(email)
-
-/**
  * How a Gorgias customer is identified.
  *
- * A ShipBob recipient often has no usable email, so both flows fall back to a synthetic
- * key built from the recipient's name and address. Making that a sealed type rather than
- * a pair of optional arguments means there is always exactly one key, the `when` over it
- * is exhaustive without an else branch, and the lookup and the created record cannot
- * disagree about it.
+ * A ShipBob recipient often has no email, so both flows fall back to a synthetic key built
+ * from the recipient's name and address. A sealed type rather than a pair of optional
+ * arguments means there is always exactly one key, and the lookup and the created record
+ * cannot disagree about it.
  */
 sealed interface CustomerKey {
     /** The key as Gorgias stores it on the customer's `external_id`. */
@@ -54,12 +38,12 @@ sealed interface CustomerKey {
 
     companion object {
         /**
-         * A valid recipient email when there is one, otherwise a synthetic
-         * `name address1 city country`. Both flows key on this, so a webhook ticket
-         * lands on the same record that carries the customer's order history.
+         * The recipient's email when there is one, otherwise a synthetic
+         * `name address1 city country`. Both flows key on this, so a webhook ticket lands
+         * on the record that carries the customer's order history.
          */
         fun forRecipient(recipient: Recipient): CustomerKey {
-            recipient.email?.takeIf(::isValidEmail)?.let { return Email(it) }
+            recipient.email?.takeIf(String::isNotBlank)?.let { return Email(it) }
             val (address1, city, country) = recipient.address
             return ExternalId(listOf(recipient.name, address1, city, country).joinToString(" ") { it.orEmpty() })
         }
@@ -91,10 +75,7 @@ private val PASSTHROUGH_FIELDS =
         "tags",
     )
 
-/**
- * One shipment as the sidebar shows it: ShipBob's own fields, with the dates made
- * readable and a deep link back into ShipBob added.
- */
+/** One shipment as the sidebar shows it: ShipBob's own fields, with readable dates and a deep link. */
 private fun sidebarShipment(shipment: JsonElement): JsonElement {
     val fields = shipment.obj ?: return shipment
     return buildJsonObject {
@@ -140,17 +121,16 @@ interface Helpdesk {
 /**
  * The real Gorgias.
  *
- * Auth is OAuth2 via Pandium's `gorgias-oauth` connector. Pandium runs the authorization
- * flow when the tenant connects and handles refreshes, so this client never sees a client
- * secret, never posts to a token endpoint, and holds no refresh logic.
+ * Auth is OAuth2 via Pandium's `gorgias-oauth` connector: Pandium runs the authorization
+ * flow and handles refreshes, so this client holds no client secret and no refresh logic.
  */
 class Gorgias(pandium: Pandium) : Helpdesk {
     private val api =
         run {
             val token = pandium.requireSecret("gorgias_oauth_access_token")
             val account = pandium.requireSecret("gorgias_oauth_account")
-            // The connector reports its own scheme; every current Gorgias token is a
-            // bearer, but read it rather than assume it.
+            // Every current Gorgias token is a bearer, but read the connector's scheme
+            // rather than assume it.
             val tokenType = pandium.secrets["gorgias_oauth_token_type"]?.takeIf(String::isNotBlank) ?: "Bearer"
             val baseUrl = "https://${account.lowercase()}.gorgias.com/api"
             logger.info { "Gorgias API base URL: $baseUrl" }

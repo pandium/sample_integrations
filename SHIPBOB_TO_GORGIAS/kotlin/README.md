@@ -136,7 +136,7 @@ sends `"tracking": null` where another topic omits the key. `coerceInputValues` 
 into the property's declared default, so `statusDetails: List<StatusDetail> = emptyList()`
 holds either way.
 
-**The customer key is a sealed interface.** A ShipBob recipient often has no usable email,
+**The customer key is a sealed interface.** A ShipBob recipient often has no email,
 so both flows fall back to a synthetic key built from the recipient's name and address.
 Making that `CustomerKey.Email | CustomerKey.ExternalId` rather than a pair of optional
 arguments means there is always exactly one key, the `when` that turns it into a query

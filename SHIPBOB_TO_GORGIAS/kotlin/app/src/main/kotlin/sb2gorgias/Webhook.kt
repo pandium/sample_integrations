@@ -19,26 +19,17 @@ private val logger = KotlinLogging.logger {}
 /**
  * The webhook flow: any ShipBob order webhook → a Gorgias ticket.
  *
- * Each webhook run may carry N debounced deliveries — Pandium bundles triggers that
- * arrive while a run is in flight — so the flow loops over every one. Creating a ticket
- * is not idempotent and ShipBob retries any delivery that does not get a 2xx, so
- * deliveries are deduped on `shipment_id:status` using a `processed_events` map in tenant
- * metadata, pruned to a 30-minute window. Keying on the status as well as the shipment is
- * what lets a redelivery be dropped while the shipment's genuine *next* status still opens
- * its own ticket.
+ * A run may carry N debounced deliveries, so the flow loops over every one. Creating a
+ * ticket is not idempotent and ShipBob retries any delivery that does not get a 2xx, so
+ * deliveries are deduped on `shipment_id:status` in a `processed_events` map in tenant
+ * metadata, pruned to a 30-minute window. Keying on the status as well as the shipment lets
+ * a redelivery be dropped while the shipment's genuine *next* status still opens a ticket.
  *
- * Because tenant metadata is shallow-merged at the top level, writing the whole
- * `processed_events` object *replaces* the previous one — dropped keys really are removed
- * — while leaving the cron flow's cursor keys alone.
- *
- * Pandium verifies each delivery's signature before it ever reaches a run, so the bodies
- * handled here are already known to have come from ShipBob.
+ * Pandium verifies each delivery's signature before it reaches a run, so the bodies handled
+ * here are already known to have come from ShipBob.
  */
 
-/**
- * How long a handled event is remembered. Long enough to cover ShipBob's retry schedule
- * and Pandium's debouncing, short enough that the map stays small.
- */
+/** How long a handled event is remembered: past ShipBob's retries, short enough to stay small. */
 private const val PRUNE_WINDOW_MINUTES = 30L
 
 /** Goes on every ticket this flow opens, so they can all be found at once. */
@@ -55,9 +46,7 @@ fun runWebhookFlow(pandium: Pandium): JsonObject {
 
 /**
  * Open a ticket for every delivery that has not been ticketed already, marking each one
- * handled in [processed] as it goes.
- *
- * Split out from [runWebhookFlow] so it can be driven by test doubles.
+ * handled in [processed] as it goes. Split out from [runWebhookFlow] for test doubles.
  */
 fun process(
     deliveries: List<WebhookDelivery>,
@@ -80,8 +69,8 @@ fun process(
             continue
         }
 
-        // Every order webhook gets a ticket, whatever the status — the status is only ever
-        // part of the dedupe key, never a filter.
+        // Every order webhook gets a ticket, whatever the status: the status is part of the
+        // dedupe key, never a filter.
         val status = event.reportedStatus
         val eventKey = "$shipmentId:$status"
         if (eventKey in processed) {
@@ -121,11 +110,8 @@ fun prune(processed: JsonElement?, now: LocalDateTime): MutableMap<String, JsonE
 }
 
 /**
- * Find-or-create the Gorgias customer for a shipment's recipient, and return the id to
- * hang the ticket off.
- *
- * Uses the same key the cron flow does, so a webhook ticket lands on the record that
- * already carries the customer's order history.
+ * Find-or-create the Gorgias customer for a shipment's recipient. Uses the same key the
+ * cron flow does, so the ticket lands on the record carrying the customer's order history.
  */
 private fun resolveCustomer(gorgias: Helpdesk, event: Shipment): Long {
     val key = CustomerKey.forRecipient(event.recipient)
@@ -139,9 +125,8 @@ private fun resolveCustomer(gorgias: Helpdesk, event: Shipment): Long {
  * The `POST /tickets` payload for a shipment webhook of any status.
  *
  * Only the parts ShipBob actually sent for this status make it into the body — an OnHold
- * shipment has no tracking, a Delivered one has no status details — which is why
- * [Shipment] models those fields as nullable and this walks through them one at a time
- * instead of filling in a fixed template.
+ * shipment has no tracking, a Delivered one has no status details — which is why [Shipment]
+ * models those fields as nullable and this walks them one at a time.
  */
 fun buildTicket(event: Shipment, customerId: Long): JsonObject {
     val shipmentId = event.id ?: 0
@@ -171,8 +156,8 @@ fun buildTicket(event: Shipment, customerId: Long): JsonObject {
         html += items.joinToString("", prefix = "<ul>", postfix = "</ul>") { "<li>$it</li>" }
     }
 
-    // Gorgias wants the customer twice — once as the ticket's owner and once as the sender
-    // of its first message — so the same reference goes in both slots.
+    // Gorgias wants the customer twice: as the ticket's owner and as the sender of its
+    // first message.
     val customer = buildJsonObject { put("id", customerId) }
     return buildJsonObject {
         put("customer", customer)
@@ -193,8 +178,7 @@ fun buildTicket(event: Shipment, customerId: Long): JsonObject {
                 put("stripped_text", headline)
             }
         }
-        // A constant tag to find every ticket this flow opened, plus the status, so
-        // Gorgias rules can route on it without parsing the body.
+        // A constant tag plus the status, so Gorgias rules can route without parsing the body.
         putJsonArray("tags") {
             addJsonObject { put("name", SHIPMENT_TAG) }
             addJsonObject { put("name", "shipbob-${status.lowercase().replace(' ', '-')}") }

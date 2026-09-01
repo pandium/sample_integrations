@@ -17,10 +17,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 
 private val logger = KotlinLogging.logger {}
 
-/**
- * ShipBob issues tokens from a different auth host per environment; map each to its
- * matching API base URL.
- */
+/** ShipBob issues tokens from a different auth host per environment. */
 private val AUTH_URL_TO_BASE_URL =
     mapOf(
         "https://authstage.shipbob.com" to "https://sandbox-api.shipbob.com/2026-01",
@@ -29,9 +26,7 @@ private val AUTH_URL_TO_BASE_URL =
 
 const val DEFAULT_BASE_URL = "https://api.shipbob.com/2026-01"
 
-/**
- * Decode the JWT payload and map its `iss` claim to an API base URL.
- */
+/** Decode the JWT payload and map its `iss` claim to an API base URL. */
 fun resolveBaseUrl(token: String): String {
     val issuer =
         runCatching {
@@ -45,19 +40,12 @@ fun resolveBaseUrl(token: String): String {
 
 // --- the shapes this integration reads ---------------------------------------
 //
-// Two styles of deserialization live here, and which one applies depends on what the
-// flow does with the data. A webhook body is small, fully specified, and every field
-// drives a decision, so it gets real types ([Shipment]), and the compiler checks the
-// field-presence logic: modeling `tracking` as a nullable [Tracking] is what makes
-// "only mention tracking when ShipBob sent some" a `?.let` the compiler can see rather
-// than a runtime lookup that might be `null`, absent, or the wrong shape. An order, by
-// contrast, is mostly *passed through* to the Gorgias sidebar unread, so it stays a raw
-// [JsonElement] and only the parts the integration acts on are pulled out.
+// A webhook body is small and every field drives a decision, so it gets real types
+// ([Shipment]) and the compiler checks the field-presence logic. An order is mostly
+// passed through to the Gorgias sidebar unread, so it stays a raw [JsonElement] and only
+// the parts the integration acts on are pulled out.
 
-/**
- * Who the order or shipment is going to. Both flows key their Gorgias customer off
- * this, which is why it is shared rather than living on [Shipment].
- */
+/** Who the order or shipment is going to. Both flows key their Gorgias customer off this. */
 @Serializable
 data class Recipient(
     val name: String? = null,
@@ -65,10 +53,7 @@ data class Recipient(
     val address: Address = Address(),
 ) {
     companion object {
-        /**
-         * Read the recipient off a raw ShipBob order. Pulling one typed field out of
-         * otherwise-untyped JSON costs nothing but the copied strings
-         */
+        /** Read the recipient off a raw ShipBob order, which is otherwise left untyped. */
         fun of(order: JsonElement?): Recipient =
             order["recipient"]
                 ?.let { runCatching { json.decodeFromJsonElement<Recipient>(it) }.getOrNull() }
@@ -115,10 +100,7 @@ data class Shipment(
         get() = deliveryDate?.take(10)?.takeIf { it.length == 10 }
 }
 
-/**
- * One reason ShipBob attached to a status, e.g. `Invalid Address`. Statuses that speak
- * for themselves, such as `Delivered`, carry none.
- */
+/** One reason ShipBob attached to a status, e.g. `Invalid Address`. */
 @Serializable
 data class StatusDetail(val name: String? = null, val description: String? = null)
 
@@ -138,9 +120,7 @@ data class InventoryItem(val quantity: Long? = null)
 
 // --- the client ---------------------------------------------------------------
 
-/**
- * The cron flow depends on this slice of ShipBob.
- */
+/** The slice of ShipBob the cron flow depends on. */
 interface Orders {
     /**
      * One page of orders created since [startDate], oldest first. Only an exhausted query
@@ -173,11 +153,9 @@ class ShipBob(pandium: Pandium) : Orders {
 
     override fun updatedOrdersPage(startDate: LocalDateTime, page: Int): List<JsonElement> {
         val now = LocalDateTime.now(ZoneOffset.UTC)
-        // ShipBob has no sort option for last-update, so order the page here.
-        // Newest-first plus a cursor that only ever moves to the *oldest* update seen
-        // keeps the sync conservative: a run cut short never skips an update, at the
-        // cost of re-processing a few (which is harmless, since the customer write is
-        // an idempotent PUT).
+        // ShipBob has no sort option for last-update, so order the page here. Newest-first
+        // plus a cursor that only moves to the oldest update seen means a run cut short
+        // never skips an update, at the cost of re-processing a few.
         return orders("LastUpdateStartDate" to isoTimestamp(startDate), "Page" to page.toString())
             .sortedByDescending { updateDate(it, startDate, now) }
     }
@@ -186,9 +164,8 @@ class ShipBob(pandium: Pandium) : Orders {
      * GET one page of `/order`.
      *
      * The caller stops paging on an empty page and commits its cursor there, so only an
-     * exhausted query may answer with one — anything else throws. The failure carries the
-     * query that produced it, because the run log otherwise only names the two halves of
-     * the sync by the page they died on.
+     * exhausted query may answer with one — anything else throws, carrying the query that
+     * produced it.
      */
     private fun orders(vararg query: Pair<String, String>): List<JsonElement> {
         val page =
@@ -207,11 +184,9 @@ class ShipBob(pandium: Pandium) : Orders {
 }
 
 /**
- * The order's effective update time: the oldest shipment `last_update_at` that still
- * falls after [startDate], or [now] when none qualify.
- *
- * ShipBob timestamps updates on shipments rather than on the order, so an order's
- * update time has to be derived from the shipments under it.
+ * The order's effective update time: the oldest shipment `last_update_at` that still falls
+ * after [startDate], or [now] when none qualify. ShipBob timestamps updates on shipments
+ * rather than on the order.
  */
 fun updateDate(order: JsonElement?, startDate: LocalDateTime, now: LocalDateTime): LocalDateTime =
     order["shipments"]

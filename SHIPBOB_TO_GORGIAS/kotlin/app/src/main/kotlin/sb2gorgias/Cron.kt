@@ -21,20 +21,15 @@ private val logger = KotlinLogging.logger {}
 /**
  * The cron flow: ShipBob orders → the Gorgias customer sidebar.
  *
- * Keeps each Gorgias customer's `data.pandium.shipbob_orders` in sync with that
- * customer's recent ShipBob orders. Runs on a schedule and resumes where the last run
- * left off, using a cursor stored in tenant metadata.
+ * Keeps each Gorgias customer's `data.pandium.shipbob_orders` in sync with that customer's
+ * recent ShipBob orders, resuming from a cursor stored in tenant metadata.
  *
- * Pandium bounds a run at roughly ten minutes, so a tenant with a large backlog will not
- * finish in one pass. To stay resumable, the sync keeps a single [Cursors] value current
- * as each order is processed, and a watchdog thread flushes it if the run gets close to
- * the limit.
+ * Pandium bounds a run at roughly ten minutes, so a large backlog will not finish in one
+ * pass. To stay resumable, the sync keeps a single [Cursors] value current as each order is
+ * processed, and a watchdog thread flushes it if the run gets close to the limit.
  */
 
-/**
- * Nine minutes: a self-imposed deadline a minute inside Pandium's limit, which leaves
- * room to write the cursor before the platform stops the run.
- */
+/** A self-imposed deadline a minute inside Pandium's limit, leaving room to write the cursor. */
 val DEADLINE = 9.minutes
 
 /** How far back the very first sync may reach, and the floor every later cursor is held to. */
@@ -44,22 +39,12 @@ private const val MAX_LOOKBACK_DAYS = 30L
 private const val MAX_ORDERS_TO_SYNC = 10
 
 /**
- * The point each of the two order queries resumes from.
+ * The point each of the two order queries resumes from. [newOrders] is fetched oldest-first,
+ * so it advances per order; [updatedOrders] is the minimum update across the whole result
+ * set, so it is only known once the last page is read.
  *
- * The two halves are written at different times, because their queries order results
- * differently:
- *
- * * [newOrders] is fetched oldest-first, so `created_date` climbs as the sync goes. It
- *   advances per order and is sound to flush at any moment.
- * * [updatedOrders] is the *minimum* update across the whole result set, which is not
- *   known until the last page is read. It is written once the loop ends, so a run cut
- *   short leaves it where the run found it.
- *
- * Either way it tracks orders *attempted*, not orders Gorgias accepted: `processOrder`
- * logs a write failure and moves on, so one unreachable customer costs that customer's
- * order rather than the rest of the backlog.
- *
- * The two cursors are held as one immutable pair in an [AtomicReference].
+ * Either way it tracks orders *attempted*, not orders Gorgias accepted: `processOrder` logs
+ * a write failure and moves on.
  */
 data class Cursors(val newOrders: LocalDateTime, val updatedOrders: LocalDateTime) {
     /**
@@ -74,7 +59,7 @@ data class Cursors(val newOrders: LocalDateTime, val updatedOrders: LocalDateTim
 
 /**
  * Hold a cursor inside `[now - 30 days, now]`. A missing or unparseable value — a first
- * run, mostly — starts at the floor, the oldest window ever fetched.
+ * run, mostly — starts at the floor.
  */
 fun clamp(value: String?, now: LocalDateTime): LocalDateTime {
     val floor = now.minusDays(MAX_LOOKBACK_DAYS)
@@ -112,32 +97,27 @@ fun runCronFlow(pandium: Pandium): JsonObject {
 }
 
 /**
- * Flush the cursor and end the run successfully if the sync is still going when
- * [deadline] passes.
- *
- * The sync loop and the watchdog share one [AtomicReference], so the watchdog always
+ * Flush the cursor and end the run successfully if the sync is still going when [deadline]
+ * passes. The loop and the watchdog share one [AtomicReference], so the watchdog always
  * writes whatever the loop had reached.
  */
 private fun flushAtDeadline(cursors: AtomicReference<Cursors>, deadline: Duration) {
     thread(isDaemon = true, name = "deadline-flush") {
         Thread.sleep(deadline.inWholeMilliseconds)
         logger.warn { "approaching the run-time limit — flushing the cursor for the next run" }
-        // The same writer the normal path uses, so there is exactly one route to stdout,
-        // and exit 0 so Pandium counts the run as a success and merges the partial cursor.
+        // The same writer the normal path uses, and exit 0 so Pandium counts the run as a
+        // success and merges the partial cursor.
         updateMetadata(cursors.get().asMetadata())
         exitProcess(0)
     }
 }
 
 /**
- * Run both halves of the sync, advancing [cursors] as each order is processed.
+ * Run both halves of the sync, advancing [cursors] as each order is processed. A failed
+ * fetch throws, ending the run without writing metadata; re-syncing on the next run is
+ * harmless, since the customer write is an idempotent PUT.
  *
- * A failed ShipBob fetch throws, ending the run without writing metadata, so the next run
- * resumes from the last cursor a completed run stored. Re-syncing what it covers again is
- * harmless: the customer write is an idempotent PUT.
- *
- * Split out from [runCronFlow] so it can be driven by test doubles: everything it touches
- * arrives through the two interfaces.
+ * Split out from [runCronFlow] so it can be driven by test doubles.
  */
 fun sync(
     shipbob: Orders,
@@ -149,8 +129,8 @@ fun sync(
     // Orders for each customer batch onto a single record.
     val customers = mutableMapOf<String, CustomerRecord>()
 
-    // New orders come back oldest-first, so created_date advances monotonically and the
-    // last order processed is the right place to resume from.
+    // New orders come back oldest-first, so the last order processed is the right place to
+    // resume from.
     val newStart = cursors.get().newOrders
     logger.info { "syncing new ShipBob orders since ${isoTimestamp(newStart)}" }
     for (order in ordersUntilExhausted { page -> shipbob.newOrdersPage(newStart, page) }) {
@@ -162,11 +142,8 @@ fun sync(
     }
 
     // Updated orders are sorted newest-first within a page but not across pages, so the
-    // cursor is the *minimum* over every order processed — not whatever the last one
-    // happened to carry. It is kept out of `cursors` until the loop ends: every update is
-    // by construction later than the starting point, so folding that in would pin the
-    // cursor there forever, and a partial minimum would sit newer than the pages still
-    // unread.
+    // cursor is the *minimum* over every order processed. It is kept out of `cursors` until
+    // the loop ends: a partial minimum would sit newer than the pages still unread.
     val updatedStart = cursors.get().updatedOrders
     logger.info { "syncing updated ShipBob orders since ${isoTimestamp(updatedStart)}" }
     var oldestUpdate: LocalDateTime? = null
@@ -183,15 +160,9 @@ fun sync(
 }
 
 /**
- * The orders of a paginated ShipBob query, page by page, until it answers with an empty
- * page.
- *
- * The sequence is lazy, so a page is fetched only once the previous one has been
- * processed and the cursor has moved with it — which is what keeps a flush mid-run
- * honest about how far the sync actually got.
- *
- * An empty page is the commit signal, so a failed fetch must not look like one: [fetch]
- * throws instead, and the exception travels straight out of the loop consuming this.
+ * The orders of a paginated ShipBob query, until it answers with an empty page. Lazy, so a
+ * page is fetched only once the previous one has been processed and the cursor has moved
+ * with it — which keeps a mid-run flush honest about how far the sync got.
  */
 private fun ordersUntilExhausted(fetch: (Int) -> List<JsonElement>): Sequence<JsonElement> =
     generateSequence(1) { it + 1 }
@@ -201,11 +172,8 @@ private fun ordersUntilExhausted(fetch: (Int) -> List<JsonElement>): Sequence<Js
 
 /**
  * Find-or-create the order's Gorgias customer, then write their updated
- * `data.pandium.shipbob_orders` back.
- *
- * Every Gorgias failure here is logged and swallowed so that the sync keeps going. The
- * order is not picked up again on the next run: see [Cursors] for what that means for the
- * cursor.
+ * `data.pandium.shipbob_orders` back. Failures are logged and swallowed so the sync keeps
+ * going; see [Cursors] for what that means for the cursor.
  */
 private fun processOrder(
     order: JsonElement,
@@ -248,15 +216,9 @@ private fun lookUp(gorgias: Helpdesk, recipient: Recipient, key: CustomerKey): C
         else -> CustomerRecord(buildJsonObject { put("data", found["data"] ?: JsonNull) }, found["id"].long)
     }
 
-/**
- * The Gorgias customer this run is building up for one customer key: what Gorgias already
- * held, plus the orders this run has added.
- */
+/** One customer key's record: what Gorgias already held, plus the orders this run added. */
 private class CustomerRecord(
-    /**
-     * What Gorgias already has — `{"data": ...}` for a customer this run found, or the
-     * whole create payload for one it has not created yet.
-     */
+    /** `{"data": ...}` for a customer this run found, or the create payload for a new one. */
     private val stored: JsonObject,
     /** `null` until the customer exists in Gorgias; the create call fills it in. */
     var id: Long?,
@@ -287,10 +249,8 @@ private class CustomerRecord(
     }
 
     /**
-     * The record as Gorgias receives it.
-     *
-     * We rebuild the record to keep `data` keys this integration does not own
-     * exactly where they were. This also defends against a hand-edited `{"pandium": null}`.
+     * The record as Gorgias receives it, rebuilt so that `data` keys this integration does
+     * not own stay exactly where they were.
      */
     fun payload(): JsonObject = buildJsonObject {
         stored.forEach { (key, value) -> if (key != "data") put(key, value) }

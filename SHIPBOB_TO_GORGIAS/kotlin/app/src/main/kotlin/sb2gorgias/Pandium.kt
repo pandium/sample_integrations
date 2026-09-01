@@ -18,26 +18,21 @@ data class WebhookDelivery(val id: String, val body: String)
  * The Pandium runtime contract.
  *
  * Everything Pandium hands to an integration arrives as an environment variable.
- * `PAN_CFG_*` ([config]) and `PAN_SEC_*` ([secrets]) hold arbitrary keys defined per
- * integration, so they are exposed as plain maps. `PAN_CTX_*` (the run context) is
- * controlled by Pandium, so its values are surfaced through named, typed properties
- * rather than raw environment lookups.
+ * `PAN_CFG_*` ([config]) and `PAN_SEC_*` ([secrets]) hold keys defined per integration, so
+ * they are plain maps. `PAN_CTX_*` (the run context) is controlled by Pandium, so it gets
+ * named, typed properties instead.
  */
 class Pandium(
     val config: Map<String, String>,
     val secrets: Map<String, String>,
     private val context: Map<String, String>,
 ) {
-    /**
-     * A boolean config. Every config reaches the run as text, so a ticked checkbox
-     * arrives as the string `"true"`.
-     */
+    /** A boolean config: every config reaches the run as text, so a ticked box is `"true"`. */
     fun flag(key: String): Boolean = config[key].equals("true", ignoreCase = true)
 
     /**
      * A secret the integration cannot run without. The message names the environment
-     * variable, so a misconfigured connector is clear in the run log rather than
-     * surfacing later as a 401.
+     * variable, so a misconfigured connector shows up in the run log rather than as a 401.
      */
     fun requireSecret(key: String): String =
         checkNotNull(secrets[key]?.takeIf(String::isNotBlank)) { "PAN_SEC_${key.uppercase()} is required" }
@@ -56,10 +51,9 @@ class Pandium(
         }
 
     /**
-     * Tenant metadata, typically persisted by the previous run.
-     *
-     * Missing or unreadable metadata comes back as `null`, which the accessors in
-     * `Json.kt` index like an empty object.
+     * Tenant metadata, typically persisted by the previous run. Missing or unreadable
+     * metadata comes back as `null`, which the `Json.kt` accessors index like an empty
+     * object.
      */
     val metadata: JsonElement? by lazy {
         val filename = context["tenant_metadata_file"] ?: return@lazy null
@@ -71,10 +65,8 @@ class Pandium(
     /**
      * The webhook deliveries bundled into this run.
      *
-     * Pandium debounces triggers per tenant, so deliveries that arrive while a run is in
-     * flight are bundled into the next one — a webhook run carries N of these, not one.
-     * Pandium writes each raw request body to disk, and the trigger names the file.
-     * This method reads the files, and callers get the bodies ready to handle.
+     * Pandium debounces triggers per tenant, so a webhook run carries N of these, not one.
+     * Each raw request body is written to disk and named by its trigger; this reads them.
      */
     fun webhookDeliveries(): List<WebhookDelivery> =
         runTriggers.filter { it["source"].string == "webhook" }.mapNotNull { trigger ->
@@ -114,9 +106,8 @@ class Pandium(
 /**
  * Merge [metadata] into the tenant metadata for the next run to read back.
  *
- * Pandium captures the last line of stdout and shallow-merges what it finds there into
- * the tenant's stored metadata, so this is the only thing a run writes to stdout — logs
- * go to stderr (see `logback.xml`).
+ * Pandium shallow-merges the last line of stdout into the tenant's stored metadata, so this
+ * is the only thing a run writes to stdout — logs go to stderr (see `logback.xml`).
  */
 fun updateMetadata(metadata: JsonElement) {
     logger.info { "updating metadata with $metadata" }

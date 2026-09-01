@@ -13,10 +13,9 @@ import java.time.temporal.ChronoUnit
 /**
  * Timestamp parsing and formatting shared by both flows.
  *
- * Between them the two APIs and the connection settings form send RFC 3339 with an
- * offset (`2026-07-05T10:00:00.1234567+00:00`), the same without one, and a bare
- * `2026-07-01`. Everything is normalised to UTC-without-an-offset — [LocalDateTime] —
- * so that comparing cursors never has to think about offsets.
+ * The two APIs and the settings form send RFC 3339 with an offset, the same without one,
+ * and a bare `2026-07-01`. Everything is normalised to UTC-without-an-offset
+ * ([LocalDateTime]), so comparing cursors never has to think about offsets.
  */
 
 /** All three shapes above, as one formatter with the parts that vary made optional. */
@@ -44,11 +43,9 @@ private val ISO: DateTimeFormatter =
 private val DISPLAY: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss 'UTC'")
 
 /**
- * Parse a timestamp from either API into UTC, or `null` if it is not a shape we
- * recognise.
- *
- * `parseBest` hands back the most specific type the text actually supports, so the
- * `when` below is the whole difference between the three shapes.
+ * Parse a timestamp from either API into UTC, or `null` if it is not a shape we recognise.
+ * `parseBest` hands back the most specific type the text supports, so the `when` below is
+ * the whole difference between the three shapes.
  */
 fun parseTimestamp(value: String?): LocalDateTime? {
     val text = value?.trim().orEmpty()

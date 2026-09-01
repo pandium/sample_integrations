@@ -12,10 +12,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 /**
- * The JSON codec both clients share.
- *
- * The settings here are what let the ShipBob shapes in `ShipBob.kt` stay small: no
- * `@SerialName` on every field, no nullable type on a field that is only sometimes sent.
+ * The JSON codec both clients share. These settings are what let the ShipBob shapes in
+ * `ShipBob.kt` stay small.
  */
 val json: Json = Json {
     // Both APIs send far more than this integration reads, and add fields over time.
@@ -30,12 +28,9 @@ val json: Json = Json {
 
 // --- reading JSON this integration does not model -----------------------------
 //
-// An order is mostly passed through to the Gorgias sidebar unread, so it stays a raw
-// [JsonElement] and only the parts the integration acts on are pulled out. These
-// accessors all take a *nullable* receiver, which is what makes that reading
-// pleasant: `order["recipient"]["address"]["city"].string` needs no `?.` and no
-// intermediate checks, because a missing key, a JSON `null`, and a value of the wrong
-// shape all answer the same way — `null`.
+// These accessors all take a *nullable* receiver, so reading into a raw order needs no
+// `?.` and no intermediate checks: `order["recipient"]["address"]["city"].string`. A
+// missing key, a JSON `null`, and a value of the wrong shape all answer `null`.
 
 /** The value at [key], or `null` unless this really is an object with that key. */
 operator fun JsonElement?.get(key: String): JsonElement? = (this as? JsonObject)?.get(key)

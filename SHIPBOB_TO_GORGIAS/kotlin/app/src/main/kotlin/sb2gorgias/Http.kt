@@ -17,30 +17,22 @@ import kotlinx.serialization.json.JsonNull
 
 private val logger = KotlinLogging.logger {}
 
-/**
- * Statuses worth retrying: rate limiting, plus the gateway errors both APIs return
- * under load. Anything else is a real answer, retried or not.
- */
+/** Statuses worth retrying: rate limiting, plus the gateway errors both APIs return under load. */
 private val RETRY_STATUSES = setOf(429, 502, 503, 504)
 
 /**
- * Total attempts, the first included. Pandium does not retry a failed run on its own,
- * so a transient 429 has to be absorbed here or the whole run is lost.
+ * Total attempts, the first included. Pandium does not retry a failed run, so a transient
+ * 429 has to be absorbed here or the whole run is lost.
  */
 private const val MAX_ATTEMPTS = 6
 
-/**
- * The longest a `Retry-After` is honoured for.
- */
+/** The longest a `Retry-After` is honoured for. */
 private val MAX_RETRY_AFTER = 60.seconds
 
 /**
- * How long [response] asked the client to wait, or `null` if it did not ask — which is
- * also the answer for a header this does not understand, since the doubling backoff is a
- * safe thing to fall back on.
- *
- * RFC 9110 lets `Retry-After` carry either a number of seconds or an HTTP date. Both APIs
- * send the first; the second is here because it costs three lines.
+ * How long [response] asked the client to wait, or `null` if it did not ask or sent a
+ * header this does not understand — either way the doubling backoff is a safe fallback.
+ * RFC 9110 allows both a number of seconds and an HTTP date.
  */
 private fun retryAfter(response: HttpResponse<*>): Duration? {
     val header = response.headers().firstValue("retry-after").getOrNull()?.trim() ?: return null
@@ -56,12 +48,11 @@ private fun retryAfter(response: HttpResponse<*>): Duration? {
 }
 
 /**
- * A very small JSON-over-HTTP client, shared by the two API clients.
+ * A very small JSON-over-HTTP client, shared by both API clients.
  *
- * Both APIs speak bearer-authenticated JSON and both rate-limit, so the only things
- * this adds over the JDK's own [HttpClient] are the standing headers and a bounded
- * retry. There is no async here on purpose: the run is sequential from start to finish,
- * so blocking calls keep it readable.
+ * Both APIs speak bearer-authenticated JSON and both rate-limit, so all this adds over the
+ * JDK's [HttpClient] are the standing headers and a bounded retry. Blocking on purpose: the
+ * run is sequential from start to finish.
  */
 class ApiClient(
     private val baseUrl: String,
@@ -99,10 +90,9 @@ class ApiClient(
      * Send [request] until it answers with something other than a retryable status, then
      * parse the body as JSON.
      *
-     * A non-2xx that survives the retries throws, carrying the status and the body —
-     * which is the pair you want in the run log when an API rejects a payload. Nothing
-     * here maps a failure onto an empty result: the cron flow treats an empty page as
-     * "the query is exhausted, commit the cursor", so the two have to stay distinct.
+     * A non-2xx that survives the retries throws, carrying the status and the body. Nothing
+     * here maps a failure onto an empty result: the cron flow reads an empty page as "the
+     * query is exhausted, commit the cursor", so the two have to stay distinct.
      */
     private fun send(request: HttpRequest): JsonElement {
         var wait = backoff
