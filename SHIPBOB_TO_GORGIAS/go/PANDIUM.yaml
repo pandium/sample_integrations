@@ -1,6 +1,6 @@
 version: 1.0
 base: golang:1.26
-build: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -o sb2gorgias
+build: CGO_ENABLED=0 go build -o sb2gorgias
 run: ./sb2gorgias
 
 # Supplies the PAN_SEC_* credentials the clients read: SHIPBOB_ACCESS_TOKEN and
