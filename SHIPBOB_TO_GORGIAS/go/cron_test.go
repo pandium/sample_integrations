@@ -98,7 +98,7 @@ func TestRun_AdvancesUpdatedCursorToOldestAcrossPages(t *testing.T) {
 	shipbob.UpdatedPages = [][]map[string]any{
 		{makeOrder(1, ago(2), "j@x.com"), makeOrder(2, ago(3), "j@x.com")},
 		{makeOrder(3, ago(9), "j@x.com"), makeOrder(4, ago(8), "j@x.com")}, // oldest update overall
-		{makeOrder(5, ago(4), "j@x.com")},                                 // newer again, after the oldest page
+		{makeOrder(5, ago(4), "j@x.com")},                                  // newer again, after the oldest page
 	}
 	gorgias := newRecordingGorgias()
 	pandium := newTestPandium(t, testPandiumOpts{secrets: gorgiasSecrets, config: map[string]string{"order_start_date": ago(20)}})
