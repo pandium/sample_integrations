@@ -13,25 +13,43 @@ import (
 	"time"
 )
 
-// lineHandler formats log lines as "[timestamp] [module] LEVEL: message". Logs go to
-// stderr; stdout is reserved for the JSON metadata Pandium reads back.
+// lineHandler formats log lines as "[timestamp] [module] LEVEL: message key=value ...". Logs
+// go to stderr; stdout is reserved for the JSON metadata Pandium reads back.
 type lineHandler struct {
-	*slog.TextHandler
 	module string
+	attrs  []slog.Attr
+}
+
+func (h *lineHandler) Enabled(_ context.Context, _ slog.Level) bool {
+	return true
 }
 
 func (h *lineHandler) Handle(_ context.Context, r slog.Record) error {
 	timestamp := r.Time.Format("2006-01-02 15:04:05")
-	_, err := fmt.Fprintf(os.Stderr, "[%s] [%s] %s: %s\n", timestamp, h.module, r.Level, r.Message)
+	line := fmt.Sprintf("[%s] [%s] %s: %s", timestamp, h.module, r.Level, r.Message)
+	for _, a := range h.attrs {
+		line += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+	}
+	r.Attrs(func(a slog.Attr) bool {
+		line += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+		return true
+	})
+	_, err := fmt.Fprintln(os.Stderr, line)
 	return err
+}
+
+func (h *lineHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &lineHandler{module: h.module, attrs: append(append([]slog.Attr{}, h.attrs...), attrs...)}
+}
+
+// WithGroup is a no-op: groups are not used here, so attrs are flattened, not namespaced.
+func (h *lineHandler) WithGroup(_ string) slog.Handler {
+	return h
 }
 
 // newLogger returns a logger scoped to the calling file, named after it.
 func newLogger(module string) *slog.Logger {
-	return slog.New(&lineHandler{
-		TextHandler: slog.NewTextHandler(os.Stderr, nil),
-		module:      module,
-	})
+	return slog.New(&lineHandler{module: module})
 }
 
 var logger = newLogger("lib")
@@ -222,8 +240,8 @@ func (p *Pandium) Metadata() map[string]any {
 }
 
 // UpdateMetadata merges metadata into the tenant metadata that the next run reads
-// back. Pandium captures stdout and merges it into the stored tenant metadata, so
-// this is the only thing that should ever be written there.
+// back. Pandium reads the last non-empty line of stdout as the metadata, so
+// anything printed to stdout after this call replaces it.
 func (p *Pandium) UpdateMetadata(metadata map[string]any) {
 	serialized, err := json.Marshal(metadata)
 	if err != nil {

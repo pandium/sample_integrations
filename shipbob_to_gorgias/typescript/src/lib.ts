@@ -150,8 +150,8 @@ export class Pandium {
 
     /**
      * Merge `metadata` into the tenant metadata that the next run reads back. Pandium
-     * captures stdout and merges it into the stored tenant metadata, so this is the only
-     * thing that should be written there.
+     * reads the last non-empty line of stdout as the metadata, so anything printed to
+     * stdout after this call replaces it.
      */
     updateMetadata(metadata: any): void {
         const json = JSON.stringify(metadata)
