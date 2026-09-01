@@ -110,8 +110,7 @@ func items(event map[string]any) string {
 	return strings.Join(lines, "\n")
 }
 
-// buildTicket builds the POST /tickets payload for a shipment webhook of any
-// status.
+// buildTicket builds the POST /tickets payload for a shipment webhook of any status.
 //
 // customerRef is the {id: ...} returned by resolveCustomer. Gorgias wants the
 // customer twice — once as the ticket's owner and once as the sender of its
@@ -249,9 +248,8 @@ func runWebhook(pandium *Pandium, gorgias GorgiasClient, now time.Time) (map[str
 	nowISO := now.UTC().Format(time.RFC3339)
 	created := 0
 
-	// Pandium bundles debounced deliveries into one run; Pandium.WebhookDeliveries
-	// reads each raw body back off disk so this loop only has to deal with the
-	// event itself.
+	// Pandium bundles debounced deliveries into one run; Pandium.WebhookDeliveries reads
+	// each raw body back off disk so this loop only has to deal with the event itself.
 	for _, delivery := range pandium.WebhookDeliveries() {
 		var event map[string]any
 		if err := json.Unmarshal([]byte(delivery.Body), &event); err != nil {
@@ -295,8 +293,7 @@ func runWebhook(pandium *Pandium, gorgias GorgiasClient, now time.Time) (map[str
 	}
 
 	webhookLogger.Info(fmt.Sprintf("Webhook flow: opened %d ticket(s); tracking %d event(s).", created, len(processed)))
-	// Replaces the map (30-min pruned); shallow merge leaves the cron flow's cursor
-	// keys intact.
+	// Replaces the map (30-min pruned); shallow merge leaves the cron flow's cursor keys intact.
 	processedAny := make(map[string]any, len(processed))
 	for k, v := range processed {
 		processedAny[k] = v
