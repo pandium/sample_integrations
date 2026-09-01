@@ -106,9 +106,9 @@ func (g *GorgiasAPI) FindCustomer(email, externalID string) (map[string]any, err
 		return nil, nil
 	}
 	first, _ := rows[0].(map[string]any)
-	id := first["id"]
+	id := formatID(first["id"])
 
-	detail, err := g.client.get(fmt.Sprintf("/customers/%v", id), nil)
+	detail, err := g.client.get("/customers/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -131,10 +131,11 @@ func (g *GorgiasAPI) CreateCustomer(payload map[string]any) (float64, error) {
 }
 
 func (g *GorgiasAPI) UpdateCustomer(id float64, payload map[string]any) error {
-	gorgiasLogger.Info(fmt.Sprintf("updating gorgias customer %v", id))
-	_, err := g.client.put(fmt.Sprintf("/customers/%s", strconv.FormatFloat(id, 'f', -1, 64)), payload)
+	idStr := strconv.FormatFloat(id, 'f', -1, 64)
+	gorgiasLogger.Info(fmt.Sprintf("updating gorgias customer %s", idStr))
+	_, err := g.client.put("/customers/"+idStr, payload)
 	if err != nil {
-		gorgiasLogger.Error(fmt.Sprintf("Update customer %v failed: %s", id, err))
+		gorgiasLogger.Error(fmt.Sprintf("Update customer %s failed: %s", idStr, err))
 		return err
 	}
 	gorgiasLogger.Info("customer updated")
