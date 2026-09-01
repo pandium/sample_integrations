@@ -23,10 +23,14 @@ const DefaultBaseURL = "https://api.shipbob.com/2026-01"
 
 // resolveBaseURL decodes the JWT payload and maps its iss claim to an API base URL.
 func resolveBaseURL(token string) string {
+	fail := func(err error) string {
+		shipbobLogger.Error(fmt.Sprintf("Could not resolve ShipBob base URL from token: %s", err))
+		return DefaultBaseURL
+	}
+
 	parts := strings.Split(token, ".")
 	if len(parts) < 2 {
-		shipbobLogger.Error("Could not resolve ShipBob base URL from token: malformed token")
-		return DefaultBaseURL
+		return fail(errors.New("malformed token"))
 	}
 	payload := parts[1]
 	if pad := len(payload) % 4; pad != 0 {
@@ -34,13 +38,11 @@ func resolveBaseURL(token string) string {
 	}
 	decoded, err := base64.URLEncoding.DecodeString(payload)
 	if err != nil {
-		shipbobLogger.Error(fmt.Sprintf("Could not resolve ShipBob base URL from token: %s", err))
-		return DefaultBaseURL
+		return fail(err)
 	}
 	var claims map[string]any
 	if err := json.Unmarshal(decoded, &claims); err != nil {
-		shipbobLogger.Error(fmt.Sprintf("Could not resolve ShipBob base URL from token: %s", err))
-		return DefaultBaseURL
+		return fail(err)
 	}
 	iss, _ := claims["iss"].(string)
 	if base, ok := authURLToBaseURL[iss]; ok {
@@ -82,9 +84,9 @@ func NewShipBobAPI(pandium *Pandium) (*ShipBobAPI, error) {
 
 // getOrders GETs one page of /order.
 //
-// Only an exhausted query answers with an empty slice. The caller stops paging
-// there and commits its cursor, so a failure — or a 200 carrying something other
-// than a list — returns an error instead.
+// Only an exhausted query answers with an empty slice.
+// The caller stops paging there and commits its cursor, so a failure — or a
+// 200 carrying something other than a list — returns an error instead.
 func (s *ShipBobAPI) getOrders(params url.Values) ([]map[string]any, error) {
 	data, err := s.client.get("/order", params)
 	if err != nil {
