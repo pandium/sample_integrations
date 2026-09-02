@@ -1,0 +1,9 @@
+# Compiled artifacts and build output
+bin/
+obj/
+
+# Published output
+publish/
+
+# Local environment variables
+.env
