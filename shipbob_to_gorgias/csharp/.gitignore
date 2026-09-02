@@ -5,5 +5,10 @@ obj/
 # Published output
 publish/
 
-# Local environment variables
+# Local credentials and run state
 .env
+metadata.json
+
+# IDE state
+.vs/
+.idea/

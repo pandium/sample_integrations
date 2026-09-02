@@ -12,6 +12,7 @@ and `run` lines of its `PANDIUM.yaml` differ.
 
 | Language | Notes |
 | --- | --- |
+| [C#](csharp/) | .NET 10, `System.Text.Json`, `HttpClient`, xUnit v3 |
 | [Kotlin](kotlin/) | Gradle, `kotlinx.serialization`, `java.net.http`, `kotlin.test` |
 | [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
@@ -75,7 +76,7 @@ Two important details:
 
 ### 3. Per-tenant state in tenant metadata
 
-Tenant metadata is Pandium's mechanism for state an integration to persist state between runs. The
+Tenant metadata is Pandium's mechanism for an integration to persist state between runs. The
 contract is two halves:
 
 - **Read** — Pandium writes the tenant's current metadata to a JSON file and names it in
