@@ -12,6 +12,7 @@ implementation declares the same connectors, configs, and metadata schema — on
 
 | Language | Notes |
 | --- | --- |
+| [C#](csharp/) | .NET 10, `System.Text.Json`, `HttpClient`, xUnit v3 |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
 | [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
