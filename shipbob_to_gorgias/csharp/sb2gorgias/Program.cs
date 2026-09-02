@@ -4,20 +4,33 @@ using DotNetEnv;
 
 using Microsoft.Extensions.Logging;
 
-namespace sb2gorgias;
+namespace Sb2Gorgias;
 
+/// <summary>
+/// Entry point. Both flows ship in one assembly and are selected by the run mode Pandium
+/// sets on <c>PAN_CTX_RUN_MODE</c>. <c>Pandium.cs</c> holds the rest of the platform
+/// contract and is the file to read first.
+/// </summary>
 internal static class Program
 {
-    private static void Main()
+    /// <summary>
+    /// A self-imposed deadline a minute inside Pandium's ten-minute run limit. A run that
+    /// stops itself here still writes its cursor to stdout and exits 0, so Pandium counts it
+    /// as a success and merges the cursor; a run that hits the hard limit is marked
+    /// Failed (Timeout) and writes nothing.
+    /// </summary>
+    private static readonly TimeSpan Deadline = TimeSpan.FromMinutes(9);
+
+    private static async Task<int> Main()
     {
-        // Pandium sets secrets, configs, and context as environment variables; a local .env
-        // file stands in for them during development. Real environment variables win over
-        // anything a stray .env sets.
+        // Pandium delivers configs, secrets, and run context as environment variables. A
+        // local .env stands in for them during development; real variables win.
         Env.Load(options: new LoadOptions(clobberExistingVars: false));
 
-        // Logs go to stderr; stdout carries the JSON metadata Pandium reads back.
+        // Every log level goes to stderr. Pandium reads the last non-empty line of stdout as
+        // the run's metadata, so nothing else may write there.
         using var loggerFactory = LoggerFactory.Create(builder => builder
-            .SetMinimumLevel(LogLevel.Debug)
+            .SetMinimumLevel(MinimumLevel())
             .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace)
             .AddSimpleConsole(options =>
             {
@@ -27,53 +40,37 @@ internal static class Program
         var logger = loggerFactory.CreateLogger(typeof(Program));
 
         var pandium = Pandium.FromEnv(loggerFactory);
+        var mode = pandium.RunMode ?? "normal";
+        logger.LogInformation("syncing ShipBob to Gorgias; this run is in mode: {RunMode}", mode);
 
-        logger.LogInformation("Hello from a Pandium integration, written in C#!");
-        logger.LogInformation("This run is in mode: {RunMode}", pandium.RunMode);
-
-        pandium.UpdateMetadata(Run(pandium.RunMode, pandium, logger));
-    }
-
-    /// <summary>The business logic of the run varies depending on the run mode.</summary>
-    private static JsonObject Run(string? mode, Pandium pandium, ILogger logger)
-    {
-        switch (mode)
+        using var deadline = new CancellationTokenSource(Deadline);
+        try
         {
-            case "init":
-                // Init mode: report which secrets are available and populate tenant metadata
-                // with the dynamic config values needed for the customer-facing config form.
-                // In the real world, these values would be derived from an api call.
-                logger.LogInformation("The available secrets are: {Secrets}", string.Join(", ", pandium.Secrets.Keys));
-                return new JsonObject
-                {
-                    ["dynamic_colors"] = new JsonArray("red", "green", "purple", "orange", "yellow"),
-                };
+            JsonObject metadata = mode switch
+            {
+                // A Gorgias ticket per ShipBob delivery bundled into this run.
+                "webhook" => await WebhookFlow.RunAsync(pandium, loggerFactory, deadline.Token),
 
-            case "webhook":
-                // Webhook mode: log each trigger's headers and body. This version emits no
-                // metadata, but there is no reason not to update metadata from here.
-                foreach (var payload in pandium.WebhookPayloads())
-                {
-                    logger.LogInformation("headers: {Headers}", payload.Headers?.ToJsonString());
-                    logger.LogInformation("body: {Body}", payload.Body?.ToJsonString());
-                }
+                // "init" (the first run after a tenant connects) and "normal" (scheduled and
+                // manual runs) both take the order sync.
+                _ => await CronFlow.RunAsync(pandium, loggerFactory, deadline.Token),
+            };
 
-                return new JsonObject();
-
-            default:
-                // Normal mode: log the config, then log the previous normal run's random
-                // number and store a fresh random number as metadata.
-                logger.LogInformation(
-                    "Tenant configs: {Configs}",
-                    string.Join(", ", pandium.Config.Select(config => $"{config.Key}: {config.Value}")));
-                var newRandomNumber = Random.Shared.Next(1_000_000);
-                if (pandium.Metadata is JsonObject previous)
-                {
-                    logger.LogInformation("last run's random number: {RandomNumber}", previous["random_number"]);
-                }
-
-                logger.LogInformation("new random number: {RandomNumber}", newRandomNumber);
-                return new JsonObject { ["random_number"] = newRandomNumber };
+            pandium.UpdateMetadata(metadata);
+            return 0;
+        }
+        catch (Exception error)
+        {
+            // A non-zero exit with nothing on stdout marks the run failed and leaves the
+            // tenant's stored metadata as the last successful run left it.
+            logger.LogError(error, "the run failed; leaving tenant metadata untouched");
+            return 1;
         }
     }
+
+    /// <summary><c>LOG_LEVEL</c> (e.g. <c>debug</c>) changes verbosity without a rebuild.</summary>
+    private static LogLevel MinimumLevel() =>
+        Enum.TryParse<LogLevel>(Environment.GetEnvironmentVariable("LOG_LEVEL"), ignoreCase: true, out var level)
+            ? level
+            : LogLevel.Information;
 }

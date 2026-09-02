@@ -3,20 +3,23 @@ using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.Logging;
 
-namespace sb2gorgias;
+namespace Sb2Gorgias;
 
 /// <summary>
-/// A single webhook trigger's headers and parsed body. Kept as separate members (rather
-/// than one combined node) so callers can log each on its own line.
+/// One webhook delivery handed to this run: the raw request body Pandium received, plus
+/// the trigger id from <c>PAN_CTX_RUN_TRIGGERS</c> for correlating with the run log.
 /// </summary>
-public sealed record WebhookPayload(JsonNode? Headers, JsonNode? Body);
+public sealed record WebhookDelivery(string Id, string Body);
 
 /// <summary>
-/// Everything Pandium hands to an integration at runtime. <see cref="Config"/>
-/// (<c>PAN_CFG_*</c>) and <see cref="Secrets"/> (<c>PAN_SEC_*</c>) hold arbitrary keys
-/// defined per integration and are exposed as plain dictionaries. Context
-/// (<c>PAN_CTX_*</c>) is controlled by Pandium, so its values are surfaced through named
-/// members.
+/// The Pandium runtime contract, in one place.
+///
+/// Everything Pandium hands an integration arrives as an environment variable.
+/// <c>PAN_CFG_*</c> holds the tenant's connection settings (<see cref="Config"/>),
+/// <c>PAN_SEC_*</c> the credentials its connectors produced (<see cref="Secrets"/>), and
+/// <c>PAN_CTX_*</c> the run context. The first two are keyed per integration, so they are
+/// plain dictionaries; the context is controlled by Pandium, so it gets named, typed
+/// members. State flows the other way through <see cref="UpdateMetadata"/>.
 /// </summary>
 public sealed class Pandium
 {
@@ -43,82 +46,102 @@ public sealed class Pandium
         WithPrefix("PAN_CTX_"),
         loggerFactory.CreateLogger<Pandium>());
 
-    /// <summary>A tenant's configs, keyed by config name.</summary>
+    /// <summary>
+    /// The tenant's connection settings, keyed by the property names in the
+    /// <c>PANDIUM.yaml</c> config schema.
+    /// </summary>
     public IReadOnlyDictionary<string, string> Config { get; }
 
-    /// <summary>A tenant's secrets, keyed by secret name.</summary>
+    /// <summary>The credentials the tenant's connectors produced, keyed by secret name.</summary>
     public IReadOnlyDictionary<string, string> Secrets { get; }
 
-    /// <summary>The run mode for this invocation (e.g. <c>init</c>, <c>webhook</c>).</summary>
+    /// <summary>A boolean config. Every config reaches the run as text, so a ticked checkbox is <c>"true"</c>.</summary>
+    public bool Flag(string key) =>
+        string.Equals(Config.GetValueOrDefault(key), "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A secret the integration cannot run without. The message names the environment
+    /// variable, so a misconfigured connector shows up in the run log rather than as a 401.
+    /// </summary>
+    public string RequireSecret(string key) =>
+        Secrets.GetValueOrDefault(key) is { Length: > 0 } secret
+            ? secret
+            : throw new InvalidOperationException($"PAN_SEC_{key.ToUpperInvariant()} is required");
+
+    /// <summary>The run mode for this invocation: <c>init</c>, <c>normal</c>, or <c>webhook</c>.</summary>
     public string? RunMode => _context.GetValueOrDefault("run_mode");
 
     /// <summary>
-    /// The triggers that caused this run, parsed from JSON. Relevant for webhook
-    /// invocations, where each trigger's <c>payload.file</c> names a file holding the raw
-    /// webhook body.
+    /// What caused this run, parsed from <c>PAN_CTX_RUN_TRIGGERS</c>: one entry per
+    /// schedule tick, manual run, or webhook delivery.
     /// </summary>
-    public IEnumerable<JsonNode?> RunTriggers
+    public IReadOnlyList<JsonNode?> RunTriggers
     {
         get
         {
-            var raw = _context.GetValueOrDefault("run_triggers");
-            if (string.IsNullOrEmpty(raw))
+            if (_context.GetValueOrDefault("run_triggers") is not { Length: > 0 } raw)
             {
                 return [];
             }
 
             try
             {
-                return JsonNode.Parse(raw) as JsonArray ?? [];
+                return JsonNode.Parse(raw).AsList();
             }
             catch (Exception error)
             {
-                _logger.LogError("could not parse run triggers as JSON: {Raw}: {Error}", raw, error.Message);
+                _logger.LogError(error, "could not parse run triggers as JSON: {Raw}", raw);
                 return [];
             }
         }
     }
 
-    /// <summary>The tenant metadata persisted by the previous run, parsed as JSON.</summary>
+    /// <summary>
+    /// The tenant's stored metadata, read from the file named by
+    /// <c>PAN_CTX_TENANT_METADATA_FILE</c>. It holds whatever previous runs have merged in
+    /// through <see cref="UpdateMetadata"/>. Missing or unreadable metadata comes back as
+    /// null, which the accessors in <c>Json.cs</c> index like an empty object.
+    /// </summary>
     public JsonNode? Metadata => _metadata.Value;
 
     /// <summary>
-    /// The webhook payloads for this run: each trigger's headers and parsed body, read from
-    /// the file its <c>payload.file</c> names. Relevant for webhook invocations.
+    /// The webhook deliveries bundled into this run.
+    ///
+    /// Pandium receives each delivery, writes the raw body to disk, and lists it as a
+    /// trigger whose <c>payload.file</c> names that file. Triggers are debounced per
+    /// tenant, so a webhook run carries N of these, not one.
     /// </summary>
-    public IReadOnlyList<WebhookPayload> WebhookPayloads()
+    public IReadOnlyList<WebhookDelivery> WebhookDeliveries()
     {
-        var payloads = new List<WebhookPayload>();
-        foreach (var trigger in RunTriggers)
+        var deliveries = new List<WebhookDelivery>();
+        foreach (var trigger in RunTriggers.Where(trigger => trigger.Field("source").AsText() == "webhook"))
         {
-            if (AsString(trigger?["mode"]) != "webhook")
+            var id = trigger.Field("id").AsText() ?? "";
+            if (trigger.Field("payload").Field("file").AsText() is not { } file)
             {
-                continue;
-            }
-
-            var payload = trigger?["payload"];
-            if (AsString(payload?["file"]) is not { } file)
-            {
+                _logger.LogWarning("webhook trigger {Id} has no payload file", id);
                 continue;
             }
 
             try
             {
-                payloads.Add(new WebhookPayload(payload?["headers"], JsonNode.Parse(File.ReadAllText(file))));
+                deliveries.Add(new WebhookDelivery(id, File.ReadAllText(file)));
             }
             catch (Exception error)
             {
-                _logger.LogError("could not read webhook payload {File}: {Error}", file, error.Message);
+                _logger.LogError(error, "could not read webhook payload {File}", file);
             }
         }
 
-        return payloads;
+        return deliveries;
     }
 
     /// <summary>
-    /// Merge <paramref name="metadata"/> into the tenant metadata that the next run reads
-    /// back. Pandium reads the last non-empty line of stdout as the metadata, so anything
-    /// printed to stdout after this call replaces it.
+    /// Hand <paramref name="metadata"/> back to Pandium for the next run to read.
+    ///
+    /// Pandium validates the last non-empty line of stdout against the manifest's
+    /// <c>metadata_schema</c> and shallow-merges it into the tenant's stored metadata, so
+    /// this is the only thing a run writes to stdout.
     /// </summary>
     public void UpdateMetadata(JsonNode metadata)
     {
@@ -136,7 +159,8 @@ public sealed class Pandium
         var items = new Dictionary<string, string>();
         foreach (DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {
-            if (entry.Key is string key && entry.Value is string value && key.StartsWith(prefix, StringComparison.Ordinal))
+            if (entry.Key is string key && entry.Value is string value &&
+                key.StartsWith(prefix, StringComparison.Ordinal))
             {
                 items[key[prefix.Length..].ToLowerInvariant()] = value;
             }
@@ -144,14 +168,6 @@ public sealed class Pandium
 
         return items;
     }
-
-    /// <summary>
-    /// The node's value when it holds a JSON string, and null for every other node type.
-    /// Reading a node of the wrong type throws, so callers that cannot trust the shape of
-    /// their JSON go through here.
-    /// </summary>
-    private static string? AsString(JsonNode? node) =>
-        node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
 
     private JsonNode? ReadMetadata()
     {
@@ -166,7 +182,7 @@ public sealed class Pandium
         }
         catch (Exception error)
         {
-            _logger.LogError("could not read tenant metadata from {File}: {Error}", filename, error.Message);
+            _logger.LogError(error, "could not read tenant metadata from {File}", filename);
             return null;
         }
     }
