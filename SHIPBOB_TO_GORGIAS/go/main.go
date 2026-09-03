@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 )
 
@@ -24,11 +23,11 @@ func run(mode string, pandium *Pandium) (map[string]any, error) {
 func main() {
 	pandium := NewPandiumFromEnv()
 
-	mainLogger.Info(fmt.Sprintf("Syncing ShipBob to Gorgias; this run is in mode: %s", pandium.RunMode()))
+	mainLogger.Info("syncing ShipBob to Gorgias", "run_mode", pandium.RunMode())
 
 	metadata, err := run(pandium.RunMode(), pandium)
 	if err != nil {
-		mainLogger.Error(fmt.Sprintf("run failed: %s", err))
+		mainLogger.Error("run failed", "error", err)
 		os.Exit(1)
 	}
 	pandium.UpdateMetadata(metadata)

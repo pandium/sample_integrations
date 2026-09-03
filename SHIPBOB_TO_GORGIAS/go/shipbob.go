@@ -24,7 +24,7 @@ const DefaultBaseURL = "https://api.shipbob.com/2026-01"
 // resolveBaseURL decodes the JWT payload and maps its iss claim to an API base URL.
 func resolveBaseURL(token string) string {
 	fail := func(err error) string {
-		shipbobLogger.Error(fmt.Sprintf("Could not resolve ShipBob base URL from token: %s", err))
+		shipbobLogger.Error("could not resolve ShipBob base URL from token", "error", err)
 		return DefaultBaseURL
 	}
 
@@ -90,7 +90,7 @@ func NewShipBobAPI(pandium *Pandium) (*ShipBobAPI, error) {
 func (s *ShipBobAPI) getOrders(params url.Values) ([]map[string]any, error) {
 	data, err := s.client.get("/order", params)
 	if err != nil {
-		shipbobLogger.Error(fmt.Sprintf("ShipBob order fetch failed (%s): %s", params.Encode(), err))
+		shipbobLogger.Error("ShipBob order fetch failed", "params", params.Encode(), "error", err)
 		return nil, err
 	}
 	if data == nil {

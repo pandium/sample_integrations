@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -149,7 +148,7 @@ func processOrder(order map[string]any, gorgias GorgiasClient, cache map[string]
 		}
 		existing, err := gorgias.FindCustomer(email, externalID)
 		if err != nil {
-			cronLogger.Error(fmt.Sprintf("Skipping order %s — cannot fetch customer %s: %s", formatID(order["id"]), key, err))
+			cronLogger.Error("cannot fetch customer; skipping order", "order_id", formatID(order["id"]), "customer_key", key, "error", err)
 			return
 		}
 
@@ -194,12 +193,12 @@ func processOrder(order map[string]any, gorgias GorgiasClient, cache map[string]
 
 	if id, hasID := customer["id"]; hasID {
 		if err := gorgias.UpdateCustomer(toFloat64(id), customer); err != nil {
-			cronLogger.Error(fmt.Sprintf("Failed to upsert Gorgias customer %s: %s", key, err))
+			cronLogger.Error("failed to upsert Gorgias customer", "customer_key", key, "error", err)
 		}
 	} else {
 		newID, err := gorgias.CreateCustomer(customer)
 		if err != nil {
-			cronLogger.Error(fmt.Sprintf("Failed to upsert Gorgias customer %s: %s", key, err))
+			cronLogger.Error("failed to upsert Gorgias customer", "customer_key", key, "error", err)
 			return
 		}
 		customer["id"] = newID
@@ -260,7 +259,7 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 	}
 
 	cancel := deps.ArmWatchdog(alarmDuration, func() {
-		cronLogger.Error("Approaching the run-time limit — flushing cursor for the next run.")
+		cronLogger.Error("approaching the run-time limit; flushing cursor for the next run")
 		// Same writer the normal path uses, so there is exactly one route to stdout.
 		pandium.UpdateMetadata(state.snapshot())
 		deps.Exit(0) // timed-out run still counts as successful -> partial cursor merged
@@ -270,7 +269,7 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 	newestFirst := strings.ToLower(pandium.Config["newest_order_first"]) == "true"
 
 	// New orders: SortOrder=Oldest, so created_date advances forward monotonically.
-	cronLogger.Info(fmt.Sprintf("Syncing new ShipBob orders since %s", state.newOrderStartDate))
+	cronLogger.Info("syncing new ShipBob orders", "start_date", state.newOrderStartDate)
 	page := 1
 	for {
 		orders, err := deps.ShipBob.NewOrdersPage(newCursor, page)
@@ -282,7 +281,7 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 			break
 		}
 		for _, order := range orders {
-			cronLogger.Info(fmt.Sprintf("Processing new order with id %s", formatID(order["id"])))
+			cronLogger.Info("processing new order", "order_id", formatID(order["id"]))
 			processOrder(order, deps.Gorgias, cache, newestFirst)
 			// created_date is YYYY-MM-DDThh:mm:ss.sssssss+00:00; trim to 26 chars
 			// for a valid (naive, microsecond) date-time.
@@ -294,7 +293,7 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 	}
 
 	// Updated orders: keyed off shipment last_update_at (see UpdatedOrdersPage).
-	cronLogger.Info(fmt.Sprintf("Syncing updated ShipBob orders since %s", state.updatedOrderStartDate))
+	cronLogger.Info("syncing updated ShipBob orders", "start_date", state.updatedOrderStartDate)
 	page = 1
 	// Each page is sorted newest-first, but pages are not sorted relative to each
 	// other, so the cursor is the minimum across every processed order — not
@@ -314,7 +313,7 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 			break
 		}
 		for _, order := range orders {
-			cronLogger.Info(fmt.Sprintf("Processing updated order with id %s", formatID(order["id"])))
+			cronLogger.Info("processing updated order", "order_id", formatID(order["id"]))
 			processOrder(order, deps.Gorgias, cache, newestFirst)
 			updateDate := deps.ShipBob.UpdateDate(order, updatedCursor)
 			if oldestUpdate == nil || updateDate.Before(*oldestUpdate) {
