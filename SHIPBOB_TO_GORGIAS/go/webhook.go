@@ -253,13 +253,13 @@ func runWebhook(pandium *Pandium, gorgias GorgiasClient, now time.Time) (map[str
 	for _, delivery := range pandium.WebhookDeliveries() {
 		var event map[string]any
 		if err := json.Unmarshal([]byte(delivery.Body), &event); err != nil {
-			webhookLogger.Error(fmt.Sprintf("Webhook delivery %s is not valid JSON: %s", delivery.ID, err))
+			webhookLogger.Error("webhook delivery is not valid JSON", "delivery_id", delivery.ID, "error", err)
 			continue
 		}
 
 		sid := ShipmentID(event)
 		if sid == "" {
-			webhookLogger.Error(fmt.Sprintf("Webhook delivery %s has no shipment id; skipping.", delivery.ID))
+			webhookLogger.Error("webhook delivery has no shipment id; skipping", "delivery_id", delivery.ID)
 			continue
 		}
 
@@ -271,28 +271,28 @@ func runWebhook(pandium *Pandium, gorgias GorgiasClient, now time.Time) (map[str
 		}
 		eventKey := fmt.Sprintf("%s:%s", sid, status)
 		if _, seen := processed[eventKey]; seen {
-			webhookLogger.Info(fmt.Sprintf("Shipment %s is already ticketed as %s; skipping duplicate.", sid, status))
+			webhookLogger.Info("shipment already ticketed; skipping duplicate", "shipment_id", sid, "status", status)
 			continue
 		}
 
 		customerRef, err := resolveCustomer(gorgias, event)
 		if err != nil {
-			webhookLogger.Error(fmt.Sprintf("Could not resolve a Gorgias customer for shipment %s: %s", sid, err))
+			webhookLogger.Error("could not resolve a Gorgias customer for shipment", "shipment_id", sid, "error", err)
 			continue // leave unprocessed so ShipBob's retry can try again
 		}
 
 		ticket, err := gorgias.CreateTicket(buildTicket(event, customerRef))
 		if err != nil {
-			webhookLogger.Error(fmt.Sprintf("Failed to open ticket for shipment %s: %s", sid, err))
+			webhookLogger.Error("failed to open ticket for shipment", "shipment_id", sid, "error", err)
 			continue // leave unprocessed so ShipBob's retry can try again
 		}
 
 		processed[eventKey] = nowISO // mark handled
 		created++
-		webhookLogger.Info(fmt.Sprintf("Opened Gorgias ticket %s for shipment %s (%s).", formatID(ticket["id"]), sid, status))
+		webhookLogger.Info("opened Gorgias ticket for shipment", "ticket_id", formatID(ticket["id"]), "shipment_id", sid, "status", status)
 	}
 
-	webhookLogger.Info(fmt.Sprintf("Webhook flow: opened %d ticket(s); tracking %d event(s).", created, len(processed)))
+	webhookLogger.Info("webhook flow complete", "tickets_opened", created, "events_tracked", len(processed))
 	// Replaces the map (30-min pruned); shallow merge leaves the cron flow's cursor keys intact.
 	processedAny := make(map[string]any, len(processed))
 	for k, v := range processed {

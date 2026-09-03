@@ -84,7 +84,7 @@ func NewGorgiasAPI(pandium *Pandium) (*GorgiasAPI, error) {
 // record (so callers can read data), or nil if not found. A given email/
 // externalID maps to at most one customer, so no pagination is needed.
 func (g *GorgiasAPI) FindCustomer(email, externalID string) (map[string]any, error) {
-	gorgiasLogger.Info(fmt.Sprintf("looking for gorgias customer: %s, %s", email, externalID))
+	gorgiasLogger.Info("looking for gorgias customer", "email", email, "external_id", externalID)
 	var query string
 	switch {
 	case email != "":
@@ -121,7 +121,7 @@ func (g *GorgiasAPI) CreateCustomer(payload map[string]any) (float64, error) {
 	gorgiasLogger.Info("creating new gorgias customer")
 	res, err := g.client.post("/customers", payload)
 	if err != nil {
-		gorgiasLogger.Error(fmt.Sprintf("Create customer failed: %s", err))
+		gorgiasLogger.Error("create customer failed", "error", err)
 		return 0, err
 	}
 	body, _ := res.(map[string]any)
@@ -132,10 +132,10 @@ func (g *GorgiasAPI) CreateCustomer(payload map[string]any) (float64, error) {
 
 func (g *GorgiasAPI) UpdateCustomer(id float64, payload map[string]any) error {
 	idStr := strconv.FormatFloat(id, 'f', -1, 64)
-	gorgiasLogger.Info(fmt.Sprintf("updating gorgias customer %s", idStr))
+	gorgiasLogger.Info("updating gorgias customer", "customer_id", idStr)
 	_, err := g.client.put("/customers/"+idStr, payload)
 	if err != nil {
-		gorgiasLogger.Error(fmt.Sprintf("Update customer %s failed: %s", idStr, err))
+		gorgiasLogger.Error("update customer failed", "customer_id", idStr, "error", err)
 		return err
 	}
 	gorgiasLogger.Info("customer updated")
@@ -146,7 +146,7 @@ func (g *GorgiasAPI) CreateTicket(payload map[string]any) (map[string]any, error
 	gorgiasLogger.Info("creating gorgias ticket")
 	res, err := g.client.post("/tickets", payload)
 	if err != nil {
-		gorgiasLogger.Error(fmt.Sprintf("Create ticket failed: %s", err))
+		gorgiasLogger.Error("create ticket failed", "error", err)
 		return nil, err
 	}
 	ticket, _ := res.(map[string]any)

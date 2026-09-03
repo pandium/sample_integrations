@@ -18,10 +18,11 @@ import (
 type lineHandler struct {
 	module string
 	attrs  []slog.Attr
+	level  slog.Level
 }
 
-func (h *lineHandler) Enabled(_ context.Context, _ slog.Level) bool {
-	return true
+func (h *lineHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= h.level
 }
 
 func (h *lineHandler) Handle(_ context.Context, r slog.Record) error {
@@ -39,7 +40,11 @@ func (h *lineHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *lineHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &lineHandler{module: h.module, attrs: append(append([]slog.Attr{}, h.attrs...), attrs...)}
+	return &lineHandler{
+		module: h.module,
+		level:  h.level,
+		attrs:  append(append([]slog.Attr{}, h.attrs...), attrs...),
+	}
 }
 
 // WithGroup is a no-op: groups are not used here, so attrs are flattened, not namespaced.
@@ -47,9 +52,10 @@ func (h *lineHandler) WithGroup(_ string) slog.Handler {
 	return h
 }
 
-// newLogger returns a logger scoped to the calling file, named after it.
+// newLogger returns a logger scoped to the calling file, named after it. Debug messages are
+// suppressed by default; only Info and above are printed.
 func newLogger(module string) *slog.Logger {
-	return slog.New(&lineHandler{module: module})
+	return slog.New(&lineHandler{module: module, level: slog.LevelInfo})
 }
 
 var logger = newLogger("lib")
@@ -182,7 +188,7 @@ func (p *Pandium) RunTriggers() []map[string]any {
 	}
 	var triggers []map[string]any
 	if err := json.Unmarshal([]byte(raw), &triggers); err != nil {
-		logger.Error(fmt.Sprintf("could not parse run triggers as JSON: %s: %s", raw, err))
+		logger.Error("could not parse run triggers as JSON", "run_triggers", raw, "error", err)
 		return nil
 	}
 	return triggers
@@ -202,12 +208,12 @@ func (p *Pandium) WebhookDeliveries() []WebhookDelivery {
 		payload, _ := trigger["payload"].(map[string]any)
 		file, _ := payload["file"].(string)
 		if file == "" {
-			logger.Error(fmt.Sprintf("webhook trigger %s has no payload file", formatID(trigger["id"])))
+			logger.Error("webhook trigger has no payload file", "trigger_id", formatID(trigger["id"]))
 			continue
 		}
 		raw, err := os.ReadFile(file)
 		if err != nil {
-			logger.Error(fmt.Sprintf("could not read webhook payload %s: %s", file, err))
+			logger.Error("could not read webhook payload", "file", file, "error", err)
 			continue
 		}
 		id := formatID(trigger["id"])
@@ -226,12 +232,12 @@ func (p *Pandium) Metadata() map[string]any {
 		}
 		raw, err := os.ReadFile(filename)
 		if err != nil {
-			logger.Error(fmt.Sprintf("could not read tenant metadata from %s: %s", filename, err))
+			logger.Error("could not read tenant metadata", "file", filename, "error", err)
 			return
 		}
 		var metadata map[string]any
 		if err := json.Unmarshal(raw, &metadata); err != nil {
-			logger.Error(fmt.Sprintf("could not parse tenant metadata %s as JSON: %s", filename, err))
+			logger.Error("could not parse tenant metadata as JSON", "file", filename, "error", err)
 			return
 		}
 		p.metadataVal = metadata
@@ -245,9 +251,9 @@ func (p *Pandium) Metadata() map[string]any {
 func (p *Pandium) UpdateMetadata(metadata map[string]any) {
 	serialized, err := json.Marshal(metadata)
 	if err != nil {
-		logger.Error(fmt.Sprintf("could not serialize metadata: %s", err))
+		logger.Error("could not serialize metadata", "error", err)
 		return
 	}
-	logger.Info(fmt.Sprintf("updating metadata with %s", serialized))
+	logger.Info("updating metadata", "metadata", string(serialized))
 	fmt.Println(string(serialized))
 }
