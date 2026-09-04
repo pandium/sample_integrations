@@ -10,7 +10,7 @@ Node.js 24, `axios`, `node:test`. No framework, no web server.
 
 ```
 typescript/
-├── PANDIUM.yaml         manifest: runtime, connectors, configs, metadata schema
+├── PANDIUM.yaml         manifest: runtime, configs, metadata schema
 ├── package.json         dependencies (axios, axios-retry, dotenv)
 ├── src/
 │   ├── index.ts          entry point; dispatches on run mode

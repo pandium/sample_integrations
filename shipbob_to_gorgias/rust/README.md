@@ -11,7 +11,7 @@ sequential from start to finish, so blocking calls keep it readable.
 
 ```
 rust/
-├── PANDIUM.yaml            manifest: runtime, connectors, configs, metadata schema
+├── PANDIUM.yaml            manifest: runtime, configs, metadata schema
 ├── Cargo.toml              dependencies
 ├── src/
 │   ├── main.rs             entry point; dispatches on run mode

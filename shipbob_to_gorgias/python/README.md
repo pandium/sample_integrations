@@ -10,7 +10,7 @@ Python 3.14, `pipenv`, `requests`. No framework, no web server.
 
 ```
 python/
-├── PANDIUM.yaml            manifest: runtime, connectors, configs, metadata schema
+├── PANDIUM.yaml            manifest: runtime, configs, metadata schema
 ├── Pipfile                 dependencies (requests, coloredlogs)
 ├── sb2gorgias/
 │   ├── __main__.py         entry point; dispatches on run mode

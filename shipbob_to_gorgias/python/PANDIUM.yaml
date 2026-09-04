@@ -1,15 +1,7 @@
 version: 1.0
-base: node:24
-build: npm install
-run: node .
-
-# Supplies the PAN_SEC_* credentials the clients read: SHIPBOB_ACCESS_TOKEN and
-# SHIPBOB_WEBHOOK_SECRET; GORGIAS-OAUTH_ACCESS_TOKEN and GORGIAS-OAUTH_ACCOUNT.
-# Both are OAuth2 connectors: Pandium runs the authorization flow when a tenant
-# connects and refreshes the tokens, so the integration only reads access tokens.
-connectors:
-  - shipbob
-  - gorgias-oauth
+base: python:3.14
+build: pipenv install
+run: pipenv run python -m sb2gorgias
 
 configs:
   schema:
@@ -25,7 +17,7 @@ configs:
     elements:
       - type: Section
         label: Sync Orders Since
-        subtitle:
+        subtitle: 
           Set how far back the first sync reaches. Later syncs will pick up where the previous sync left off. Limited to the last 30 days.
         elements:
           - label: Sync orders since

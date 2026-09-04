@@ -1,15 +1,7 @@
 version: 1.0
-base: node:24
-build: npm install --production && npm i --save-dev @types/node && npm run build
-run: node .
-
-# Supplies the PAN_SEC_* credentials the clients read: SHIPBOB_ACCESS_TOKEN and
-# SHIPBOB_WEBHOOK_SECRET; GORGIAS-OAUTH_ACCESS_TOKEN and GORGIAS-OAUTH_ACCOUNT.
-# Both are OAuth2 connectors: Pandium runs the authorization flow when a tenant
-# connects and refreshes the tokens, so the integration only reads access tokens.
-connectors:
-  - shipbob
-  - gorgias-oauth
+base: rust:1.97
+build: cargo build --release
+run: ./target/release/sb2gorgias
 
 configs:
   schema:

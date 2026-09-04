@@ -7,15 +7,16 @@ status.
 ## Implementations
 
 The same integration, built the same way, in each language Pandium supports. Every
-implementation declares the same connectors, configs, and metadata schema — only the
-`base`, `build`, and `run` lines of its `PANDIUM.yaml` differ.
+implementation declares the same configs and metadata schema — only the `base`, `build`,
+and `run` lines of its `PANDIUM.yaml` differ.
 
 | Language | Notes |
 | --- | --- |
+| [Kotlin](kotlin/) | Gradle, `kotlinx.serialization`, `java.net.http`, `kotlin.test` |
+| [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
 | [Python](python/) | `pipenv`, `requests`, `pytest` |
 | [Rust](rust/) | `cargo`, `ureq`, `serde` |
 | [TypeScript](typescript/) | Node.js, `axios`, `node:test` |
-| [Node.js](nodejs/) | Node.js, `axios`, `node:test`, no build step |
 
 More languages are on the way.
 
@@ -142,19 +143,15 @@ optional on a ShipBob shipment, so both paths matter here.
 
 ## Anatomy
 
-`PANDIUM.yaml` is the manifest — it declares the runtime, the connectors whose secrets get
-injected, the configuration form your users fill in, and the metadata schema. Only three 
-lines change between language implementations:
+`PANDIUM.yaml` is the manifest — it declares the runtime, the configuration form your
+users fill in, and the metadata schema. Only three lines change between language
+implementations:
 
 ```yaml
 version: 1.0
 base: python:3.14      # also: node, ruby, java, php, .net, go, kotlin, rust
 build: pipenv install
 run: pipenv run python -m sb2gorgias
-
-connectors:
-  - shipbob
-  - gorgias-oauth
 ```
 
 The information the integration needs to do its job arrives as environment variables.
