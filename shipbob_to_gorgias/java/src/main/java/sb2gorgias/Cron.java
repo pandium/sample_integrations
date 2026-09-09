@@ -164,7 +164,7 @@ final class Cron {
                 }
                 data.put("pandium", pandium);
                 customer = new JSONObject();
-                customer.put("id", existing.opt("id"));
+                customer.put("id", existing.get("id"));
                 customer.put("data", data);
             } else {
                 customer = GorgiasApi.newCustomerPayload(order, key);
