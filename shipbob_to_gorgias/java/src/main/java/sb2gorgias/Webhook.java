@@ -81,7 +81,7 @@ final class Webhook {
         JSONArray details = detailsObj instanceof JSONArray a ? a : new JSONArray();
         List<String> reasons = new ArrayList<>();
         for (int i = 0; i < details.length(); i++) {
-            if (details.opt(i) instanceof JSONObject d) {
+            if (details.opt(i) instanceof JSONObject d && !d.isEmpty()) {
                 String desc = d.optString("description", "");
                 reasons.add(!desc.isEmpty() ? desc : d.optString("name", ""));
             }
@@ -217,7 +217,7 @@ final class Webhook {
 
         JSONObject existing = gorgias.findCustomer(email.isEmpty() ? null : email, email.isEmpty() ? key : null);
         if (existing != null) {
-            return new JSONObject().put("id", existing.opt("id"));
+            return new JSONObject().put("id", existing.get("id"));
         }
         long newId = gorgias.createCustomer(GorgiasApi.newCustomerPayload(event, key));
         return new JSONObject().put("id", newId);

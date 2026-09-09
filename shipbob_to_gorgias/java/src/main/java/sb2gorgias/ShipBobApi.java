@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +75,7 @@ final class ShipBobApi implements ShipBobClient {
             LOGGER.log(Level.SEVERE, "ShipBob order fetch failed (" + params + "): " + e.getMessage());
             throw e;
         }
-        if (data == null) {
+        if (data == null || data == JSONObject.NULL) {
             return List.of();
         }
         if (!(data instanceof JSONArray array)) {
@@ -111,7 +112,13 @@ final class ShipBobApi implements ShipBobClient {
         params.put("LastUpdateStartDate", startDate.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         params.put("Page", String.valueOf(page));
         List<JSONObject> orders = getOrders(params);
-        orders.sort(Comparator.comparing((JSONObject order) -> updateDate(order, startDate)).reversed());
+        // Computed once per order since updateDate() can fall back to now(), which must stay
+        // stable across a single sort.
+        Map<JSONObject, OffsetDateTime> updateDates = new IdentityHashMap<>();
+        for (JSONObject order : orders) {
+            updateDates.put(order, updateDate(order, startDate));
+        }
+        orders.sort(Comparator.comparing(updateDates::get).reversed());
         return orders;
     }
 
