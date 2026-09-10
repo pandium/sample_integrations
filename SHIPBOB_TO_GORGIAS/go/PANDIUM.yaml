@@ -1,5 +1,5 @@
 version: 1.0
-base: golang:1.26
+base: golang:1.27
 build: CGO_ENABLED=0 go build -o sb2gorgias
 run: ./sb2gorgias
 

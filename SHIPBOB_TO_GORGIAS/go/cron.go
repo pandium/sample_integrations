@@ -33,9 +33,9 @@ const (
 	maxOrdersToSync = 10 // most recent N orders kept on each customer
 )
 
-// Clamp keeps a cursor within [now - 1 month, now]. Unparseable/missing values
+// clamp keeps a cursor within [now - 1 month, now]. Unparseable/missing values
 // fall back to one month ago (the oldest window we ever fetch).
-func Clamp(value string, now time.Time) time.Time {
+func clamp(value string, now time.Time) time.Time {
 	floor := now.Add(-oneMonth)
 	parsed, ok := parseTimestamp(value)
 	if !ok {
@@ -73,6 +73,18 @@ func (c *cursorState) setUpdated(v string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.updatedOrderStartDate = v
+}
+
+func (c *cursorState) newCursor() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.newOrderStartDate
+}
+
+func (c *cursorState) updatedCursor() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.updatedOrderStartDate
 }
 
 func (c *cursorState) snapshot() map[string]any {
@@ -137,8 +149,8 @@ func upsertOrder(orders []map[string]any, orderPayload map[string]any, newestFir
 // updated data.pandium.shipbob_orders. cache accumulates customer payloads within
 // a run so multiple orders for one customer batch onto the same record.
 func processOrder(order map[string]any, gorgias GorgiasClient, cache map[string]map[string]any, newestFirst bool) {
-	key := CustomerKey(order)
-	email := ValidEmail(asString(deepGet(order, "recipient.email", "")))
+	key := customerKey(order)
+	email := validEmail(asString(deepGet(order, "recipient.email", "")))
 
 	customer, cached := cache[key]
 	if !cached {
@@ -170,7 +182,7 @@ func processOrder(order map[string]any, gorgias GorgiasClient, cache map[string]
 			data["pandium"] = pandium
 			customer = map[string]any{"id": existing["id"], "data": data}
 		} else {
-			customer = NewCustomerPayload(order, key)
+			customer = newCustomerPayload(order, key)
 		}
 		cache[key] = customer
 	}
@@ -184,7 +196,7 @@ func processOrder(order map[string]any, gorgias GorgiasClient, cache map[string]
 			orders = append(orders, m)
 		}
 	}
-	orders = upsertOrder(orders, OrderDataPayload(order), newestFirst)
+	orders = upsertOrder(orders, orderDataPayload(order), newestFirst)
 	ordersAny = make([]any, len(orders))
 	for i, o := range orders {
 		ordersAny[i] = o
@@ -250,8 +262,8 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 	}
 	fallback := pandium.Config["order_start_date"]
 
-	newCursor := Clamp(firstNonEmpty(asString(metadata["new_order_start_date"]), fallback), now)
-	updatedCursor := Clamp(firstNonEmpty(asString(metadata["updated_order_start_date"]), fallback), now)
+	newCursor := clamp(firstNonEmpty(asString(metadata["new_order_start_date"]), fallback), now)
+	updatedCursor := clamp(firstNonEmpty(asString(metadata["updated_order_start_date"]), fallback), now)
 
 	state := &cursorState{
 		newOrderStartDate:     formatCursor(newCursor),
@@ -269,7 +281,7 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 	newestFirst := strings.ToLower(pandium.Config["newest_order_first"]) == "true"
 
 	// New orders: SortOrder=Oldest, so created_date advances forward monotonically.
-	cronLogger.Info("syncing new ShipBob orders", "start_date", state.newOrderStartDate)
+	cronLogger.Info("syncing new ShipBob orders", "start_date", state.newCursor())
 	page := 1
 	for {
 		orders, err := deps.ShipBob.NewOrdersPage(newCursor, page)
@@ -292,8 +304,8 @@ func runCron(pandium *Pandium, deps cronDeps) (map[string]any, error) {
 		page++
 	}
 
-	// Updated orders: keyed off shipment last_update_at (see UpdatedOrdersPage).
-	cronLogger.Info("syncing updated ShipBob orders", "start_date", state.updatedOrderStartDate)
+	// Updated orders: keyed off shipment last_update_at (see UpdateDate).
+	cronLogger.Info("syncing updated ShipBob orders", "start_date", state.updatedCursor())
 	page = 1
 	// Each page is sorted newest-first, but pages are not sorted relative to each
 	// other, so the cursor is the minimum across every processed order — not

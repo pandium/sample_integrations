@@ -16,10 +16,10 @@ func TestGorgiasAPI_BuildsBaseURLAndBearerHeader(t *testing.T) {
 }
 
 func TestCustomerKey_EmailOrSynthetic(t *testing.T) {
-	if got := CustomerKey(makeOrder(1, "x", "jane@example.com")); got != "jane@example.com" {
-		t.Errorf("CustomerKey(with email) = %q, want %q", got, "jane@example.com")
+	if got := customerKey(makeOrder(1, "x", "jane@example.com")); got != "jane@example.com" {
+		t.Errorf("customerKey(with email) = %q, want %q", got, "jane@example.com")
 	}
-	if got := CustomerKey(makeOrder(1, "x", "")); got != "Buyer 1 Main St NY US" {
-		t.Errorf("CustomerKey(no email) = %q, want %q", got, "Buyer 1 Main St NY US")
+	if got := customerKey(makeOrder(1, "x", "")); got != "Buyer 1 Main St NY US" {
+		t.Errorf("customerKey(no email) = %q, want %q", got, "Buyer 1 Main St NY US")
 	}
 }

@@ -13,7 +13,7 @@ import (
 )
 
 // ago is a ShipBob-shaped timestamp `days` back — seven fractional digits, as the
-// real API sends — inside Clamp's 30-day window.
+// real API sends — inside clamp's 30-day window.
 func ago(days int) string {
 	d := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC()
 	return d.Format("2006-01-02T15:04:05") + ".1234567+00:00"
@@ -37,14 +37,14 @@ func captureStdout(t *testing.T, fn func()) string {
 
 func TestClamp_BoundsCursorBetweenOneMonthAgoAndNow(t *testing.T) {
 	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
-	if got := Clamp("2026-07-10T00:00:00Z", now); !got.Equal(time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)) {
+	if got := clamp("2026-07-10T00:00:00Z", now); !got.Equal(time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("in range: got %v", got)
 	}
-	if got := Clamp("2099-01-01T00:00:00Z", now); !got.Equal(now) {
+	if got := clamp("2099-01-01T00:00:00Z", now); !got.Equal(now) {
 		t.Errorf("future -> now: got %v, want %v", got, now)
 	}
 	floor := now.Add(-oneMonth)
-	if got := Clamp("", now); !got.Equal(floor) {
+	if got := clamp("", now); !got.Equal(floor) {
 		t.Errorf("missing -> floor: got %v, want %v", got, floor)
 	}
 }
@@ -177,7 +177,7 @@ func TestTimeout_FlushesTheFinishedHalfAndLeavesTheInterruptedOne(t *testing.T) 
 	if got := flushed["new_order_start_date"]; got != wantNew {
 		t.Errorf("new_order_start_date = %v, want %v", got, wantNew)
 	}
-	wantUpdated := formatCursor(Clamp(start, now)) // this one did not
+	wantUpdated := formatCursor(clamp(start, now)) // this one did not
 	if got := flushed["updated_order_start_date"]; got != wantUpdated {
 		t.Errorf("updated_order_start_date = %v, want %v", got, wantUpdated)
 	}

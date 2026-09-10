@@ -153,18 +153,18 @@ func (g *GorgiasAPI) CreateTicket(payload map[string]any) (map[string]any, error
 	return ticket, nil
 }
 
-// ValidEmail returns email if Gorgias would accept it, else "".
-func ValidEmail(email string) string {
+// validEmail returns email if Gorgias would accept it, else "".
+func validEmail(email string) string {
 	if email != "" && !strings.Contains(email, ".@") && emailRE.MatchString(email) {
 		return email
 	}
 	return ""
 }
 
-// CustomerKey is the key identifying an order's customer: a valid recipient email
+// customerKey is the key identifying an order's customer: a valid recipient email
 // when present, otherwise a synthetic "name address1 city country".
-func CustomerKey(order map[string]any) string {
-	email := ValidEmail(asString(deepGet(order, "recipient.email", "")))
+func customerKey(order map[string]any) string {
+	email := validEmail(asString(deepGet(order, "recipient.email", "")))
 	if email != "" {
 		return email
 	}
@@ -178,22 +178,22 @@ func CustomerKey(order map[string]any) string {
 	return strings.Join(parts, " ")
 }
 
-// NewCustomerPayload is the body for POST /customers when the customer does not
+// newCustomerPayload is the body for POST /customers when the customer does not
 // yet exist.
-func NewCustomerPayload(order map[string]any, key string) map[string]any {
+func newCustomerPayload(order map[string]any, key string) map[string]any {
 	payload := map[string]any{
 		"name":        deepGet(order, "recipient.name", ""),
 		"external_id": key,
 		"data":        map[string]any{"pandium": map[string]any{"shipbob_orders": []any{}}},
 	}
-	if email := ValidEmail(asString(deepGet(order, "recipient.email", ""))); email != "" {
+	if email := validEmail(asString(deepGet(order, "recipient.email", ""))); email != "" {
 		payload["email"] = email
 	}
 	return payload
 }
 
-// OrderDataPayload is the single order entry stored in data.pandium.shipbob_orders.
-func OrderDataPayload(order map[string]any) map[string]any {
+// orderDataPayload is the single order entry stored in data.pandium.shipbob_orders.
+func orderDataPayload(order map[string]any) map[string]any {
 	shipments, _ := deepGet(order, "shipments", []any{}).([]any)
 	for _, item := range shipments {
 		shipment, ok := item.(map[string]any)

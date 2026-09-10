@@ -52,10 +52,10 @@ func prune(processed map[string]string, now time.Time) map[string]string {
 	return kept
 }
 
-// ShipmentID reads the shipment id off a webhook event. ShipBob names it "id" on
+// shipmentID reads the shipment id off a webhook event. ShipBob names it "id" on
 // the webhook body; older docs and some topics call it "shipment_id". Accept
 // either.
-func ShipmentID(event map[string]any) string {
+func shipmentID(event map[string]any) string {
 	if id := formatID(deepGet(event, "id", nil)); id != "" {
 		return id
 	}
@@ -116,7 +116,7 @@ func items(event map[string]any) string {
 // customer twice — once as the ticket's owner and once as the sender of its
 // first message — so the same reference goes in both slots.
 func buildTicket(event map[string]any, customerRef map[string]any) map[string]any {
-	sid := ShipmentID(event)
+	sid := shipmentID(event)
 	orderID := asString(deepGet(event, "order_id", ""))
 	referenceID := asString(deepGet(event, "reference_id", ""))
 	if referenceID == "" {
@@ -204,8 +204,8 @@ func buildTicket(event map[string]any, customerRef map[string]any) map[string]an
 // history. Recipient email is optional on a ShipBob shipment, so the external_id
 // path carries as much weight here as it does in the cron flow.
 func resolveCustomer(gorgias GorgiasClient, event map[string]any) (map[string]any, error) {
-	email := ValidEmail(asString(deepGet(event, "recipient.email", "")))
-	key := CustomerKey(event)
+	email := validEmail(asString(deepGet(event, "recipient.email", "")))
+	key := customerKey(event)
 
 	var externalID string
 	if email == "" {
@@ -218,7 +218,7 @@ func resolveCustomer(gorgias GorgiasClient, event map[string]any) (map[string]an
 	if existing != nil {
 		return map[string]any{"id": existing["id"]}, nil
 	}
-	newID, err := gorgias.CreateCustomer(NewCustomerPayload(event, key))
+	newID, err := gorgias.CreateCustomer(newCustomerPayload(event, key))
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func runWebhook(pandium *Pandium, gorgias GorgiasClient, now time.Time) (map[str
 			continue
 		}
 
-		sid := ShipmentID(event)
+		sid := shipmentID(event)
 		if sid == "" {
 			webhookLogger.Error("webhook delivery has no shipment id; skipping", "delivery_id", delivery.ID)
 			continue

@@ -205,7 +205,7 @@ its own by flipping `PAN_CTX_RUN_MODE` to `webhook` in `.env` and rebuilding/run
 ## Go-specific notes
 
 - `maxOrdersToSync` in `cron.go` caps how many orders are retained per customer (10).
-- `Clamp` in `cron.go` is what enforces the 30-day floor the connection-settings form
+- `clamp` in `cron.go` is what enforces the 30-day floor the connection-settings form
   promises; the manifest does not constrain the date itself.
 - `parseTimestamp` in `lib.go` normalizes every timestamp to UTC, so cursor comparisons
   never have to think about offsets — the two APIs and the settings form send an RFC 3339
