@@ -1,5 +1,5 @@
 {
-    "name": "pokemon",
+    "name": "pokemon-of-the-day",
     "version": "1.0.0",
     "main": "build/src/",
     "scripts": {
@@ -8,10 +8,12 @@
     },
     "type": "module",
     "dependencies": {
+        "@slack/web-api": "^8.1.1",
         "axios": "^1.19.0",
         "axios-retry": "^4.5.0",
         "dotenv": "^17.4.2",
         "log4js": "^6.9.1",
+        "pokedex-promise-v2": "^4.2.3",
         "typescript": "^7.0.2"
     },
     "devDependencies": {
