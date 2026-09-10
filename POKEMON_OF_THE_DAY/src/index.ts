@@ -5,6 +5,7 @@ import { WebClient } from '@slack/web-api'
 import Pokedex from 'pokedex-promise-v2'
 import { Pandium } from './lib.js'
 import { pokemonSync } from './processLogic/pokemonSync.js'
+import { initSync } from './processLogic/initSync.js'
 
 // lib.js configures log4js; this just gets a logger named for this file.
 const logger = log4js.getLogger('index')
@@ -20,10 +21,13 @@ const main = async () => {
     const slackClient = new WebClient(pandium.secrets.slack_oauth_access_token)
 
     // Pandium integrations can be run in 'init' or 'normal' mode.
-    // pokemonSync returns the metadata to save for the tenant; updateMetadata prints it
+    // Each flow returns the metadata to save for the tenant; updateMetadata prints it
     // to stdout, where Pandium reads it back at the end of the run.
     if (pandium.runMode() === 'normal') {
         const metadata = await pokemonSync(pokeClient, slackClient, pandium)
+        pandium.updateMetadata(metadata)
+    } else {
+        const metadata = await initSync(pokeClient, slackClient)
         pandium.updateMetadata(metadata)
     }
 }
