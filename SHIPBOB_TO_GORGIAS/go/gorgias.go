@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -11,10 +13,6 @@ import (
 )
 
 var gorgiasLogger = newLogger("gorgias")
-
-// emailRE mirrors the check the older integration used, so a recipient email
-// found here is one Gorgias would actually accept.
-var emailRE = regexp.MustCompile(`^([-!#-'*+/-9=?A-Z^-~]+(\.[-!#-'*+/-9=?A-Z^-~]+)*|"([\]!#-[^-~ \t]|(\\[\t -~]))+")@([-!#-'*+/-9=?A-Z^-~]+(\.[-!#-'*+/-9=?A-Z^-~]+)*|\[[\t -Z^-~]*])$`)
 
 // isoRE captures the date/time portion of a ShipBob ISO timestamp, ignoring the
 // fractional seconds and offset entirely.
@@ -39,10 +37,10 @@ func formatDate(value string) string {
 // GorgiasClient is what cron.go/webhook.go depend on for network calls —
 // satisfied by *GorgiasAPI and, in tests, by a fake.
 type GorgiasClient interface {
-	FindCustomer(email, externalID string) (map[string]any, error) // nil, nil = not found
-	CreateCustomer(payload map[string]any) (float64, error)
-	UpdateCustomer(id float64, payload map[string]any) error
-	CreateTicket(payload map[string]any) (map[string]any, error)
+	FindCustomer(ctx context.Context, email, externalID string) (map[string]any, error) // nil, nil = not found
+	CreateCustomer(ctx context.Context, payload map[string]any) (float64, error)
+	UpdateCustomer(ctx context.Context, id float64, payload map[string]any) error
+	CreateTicket(ctx context.Context, payload map[string]any) (map[string]any, error)
 }
 
 // GorgiasAPI is the Gorgias client.
@@ -83,7 +81,7 @@ func NewGorgiasAPI(pandium *Pandium) (*GorgiasAPI, error) {
 // FindCustomer looks a customer up by email or externalID and returns the detail
 // record (so callers can read data), or nil if not found. A given email/
 // externalID maps to at most one customer, so no pagination is needed.
-func (g *GorgiasAPI) FindCustomer(email, externalID string) (map[string]any, error) {
+func (g *GorgiasAPI) FindCustomer(ctx context.Context, email, externalID string) (map[string]any, error) {
 	gorgiasLogger.Info("looking for gorgias customer", "email", email, "external_id", externalID)
 	var query string
 	switch {
@@ -95,7 +93,7 @@ func (g *GorgiasAPI) FindCustomer(email, externalID string) (map[string]any, err
 		return nil, nil
 	}
 
-	res, err := g.client.get("/customers?"+query, nil)
+	res, err := g.client.get(ctx, "/customers?"+query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +106,7 @@ func (g *GorgiasAPI) FindCustomer(email, externalID string) (map[string]any, err
 	first, _ := rows[0].(map[string]any)
 	id := formatID(first["id"])
 
-	detail, err := g.client.get("/customers/"+id, nil)
+	detail, err := g.client.get(ctx, "/customers/"+id, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -117,9 +115,9 @@ func (g *GorgiasAPI) FindCustomer(email, externalID string) (map[string]any, err
 	return customer, nil
 }
 
-func (g *GorgiasAPI) CreateCustomer(payload map[string]any) (float64, error) {
+func (g *GorgiasAPI) CreateCustomer(ctx context.Context, payload map[string]any) (float64, error) {
 	gorgiasLogger.Info("creating new gorgias customer")
-	res, err := g.client.post("/customers", payload)
+	res, err := g.client.post(ctx, "/customers", payload)
 	if err != nil {
 		gorgiasLogger.Error("create customer failed", "error", err)
 		return 0, err
@@ -130,10 +128,10 @@ func (g *GorgiasAPI) CreateCustomer(payload map[string]any) (float64, error) {
 	return id, nil
 }
 
-func (g *GorgiasAPI) UpdateCustomer(id float64, payload map[string]any) error {
+func (g *GorgiasAPI) UpdateCustomer(ctx context.Context, id float64, payload map[string]any) error {
 	idStr := strconv.FormatFloat(id, 'f', -1, 64)
 	gorgiasLogger.Info("updating gorgias customer", "customer_id", idStr)
-	_, err := g.client.put("/customers/"+idStr, payload)
+	_, err := g.client.put(ctx, "/customers/"+idStr, payload)
 	if err != nil {
 		gorgiasLogger.Error("update customer failed", "customer_id", idStr, "error", err)
 		return err
@@ -142,9 +140,9 @@ func (g *GorgiasAPI) UpdateCustomer(id float64, payload map[string]any) error {
 	return nil
 }
 
-func (g *GorgiasAPI) CreateTicket(payload map[string]any) (map[string]any, error) {
+func (g *GorgiasAPI) CreateTicket(ctx context.Context, payload map[string]any) (map[string]any, error) {
 	gorgiasLogger.Info("creating gorgias ticket")
-	res, err := g.client.post("/tickets", payload)
+	res, err := g.client.post(ctx, "/tickets", payload)
 	if err != nil {
 		gorgiasLogger.Error("create ticket failed", "error", err)
 		return nil, err
@@ -154,39 +152,64 @@ func (g *GorgiasAPI) CreateTicket(payload map[string]any) (map[string]any, error
 }
 
 // validEmail returns email if Gorgias would accept it, else "".
+// validEmail returns email if Gorgias would accept it, else "". Requiring the parsed
+// address to equal the input rejects anything mail.ParseAddress accepts beyond a bare
+// address, e.g. a display name like "Jane Doe <jane@example.com>".
 func validEmail(email string) string {
-	if email != "" && !strings.Contains(email, ".@") && emailRE.MatchString(email) {
-		return email
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email {
+		return ""
 	}
-	return ""
+	return email
 }
 
-// customerKey is the key identifying an order's customer: a valid recipient email
-// when present, otherwise a synthetic "name address1 city country".
-func customerKey(order map[string]any) string {
-	email := validEmail(asString(deepGet(order, "recipient.email", "")))
-	if email != "" {
+// recipient is the part of a ShipBob order or shipment event that identifies who
+// it ships to.
+type recipient struct {
+	Name    string
+	Email   string
+	Address address
+}
+
+type address struct {
+	Address1 string
+	City     string
+	Country  string
+}
+
+// recipientFromOrder pulls a recipient out of an order, which otherwise stays a
+// map[string]any (see orderDataPayload).
+func recipientFromOrder(order map[string]any) recipient {
+	addr, _ := deepGet(order, "recipient.address", map[string]any{}).(map[string]any)
+	return recipient{
+		Name:  asString(deepGet(order, "recipient.name", "")),
+		Email: asString(deepGet(order, "recipient.email", "")),
+		Address: address{
+			Address1: asString(deepGet(addr, "address1", "")),
+			City:     asString(deepGet(addr, "city", "")),
+			Country:  asString(deepGet(addr, "country", "")),
+		},
+	}
+}
+
+// customerKey is the key identifying a recipient's customer: a valid email when
+// present, otherwise a synthetic "name address1 city country".
+func customerKey(r recipient) string {
+	if email := validEmail(r.Email); email != "" {
 		return email
 	}
-	address, _ := deepGet(order, "recipient.address", map[string]any{}).(map[string]any)
-	parts := []string{
-		asString(deepGet(order, "recipient.name", "")),
-		asString(deepGet(address, "address1", "")),
-		asString(deepGet(address, "city", "")),
-		asString(deepGet(address, "country", "")),
-	}
-	return strings.Join(parts, " ")
+	return strings.Join([]string{r.Name, r.Address.Address1, r.Address.City, r.Address.Country}, " ")
 }
 
 // newCustomerPayload is the body for POST /customers when the customer does not
 // yet exist.
-func newCustomerPayload(order map[string]any, key string) map[string]any {
+func newCustomerPayload(r recipient, key string) map[string]any {
 	payload := map[string]any{
-		"name":        deepGet(order, "recipient.name", ""),
+		"name":        r.Name,
 		"external_id": key,
 		"data":        map[string]any{"pandium": map[string]any{"shipbob_orders": []any{}}},
 	}
-	if email := validEmail(asString(deepGet(order, "recipient.email", ""))); email != "" {
+	if email := validEmail(r.Email); email != "" {
 		payload["email"] = email
 	}
 	return payload

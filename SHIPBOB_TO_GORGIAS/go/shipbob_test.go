@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -32,8 +33,8 @@ func TestResolveBaseURL_FromTokenIssuer(t *testing.T) {
 			}
 		})
 	}
-	if got := resolveBaseURL("not-a-jwt"); got != DefaultBaseURL {
-		t.Errorf("resolveBaseURL(malformed) = %q, want %q (default -> prod)", got, DefaultBaseURL)
+	if got := resolveBaseURL("not-a-jwt"); got != defaultBaseURL {
+		t.Errorf("resolveBaseURL(malformed) = %q, want %q (default -> prod)", got, defaultBaseURL)
 	}
 }
 
@@ -58,14 +59,14 @@ func TestGetOrders_RaisesInsteadOfReportingItselfEmpty(t *testing.T) {
 
 	// exhausted -> empty, no error
 	api.client.doRequest = func(*http.Request) (*http.Response, error) { return stubResponse(200, "[]"), nil }
-	orders, err := api.NewOrdersPage(start, 1)
+	orders, err := api.NewOrdersPage(context.Background(), start, 1)
 	if err != nil || len(orders) != 0 {
 		t.Errorf("exhausted page: got (%v, %v), want ([], nil)", orders, err)
 	}
 
 	// a failure, not an empty page
 	api.client.doRequest = func(*http.Request) (*http.Response, error) { return stubResponse(503, ""), nil }
-	if _, err := api.NewOrdersPage(start, 1); err == nil {
+	if _, err := api.NewOrdersPage(context.Background(), start, 1); err == nil {
 		t.Error("503 response: want an error, got nil")
 	}
 
@@ -73,7 +74,7 @@ func TestGetOrders_RaisesInsteadOfReportingItselfEmpty(t *testing.T) {
 	api.client.doRequest = func(*http.Request) (*http.Response, error) {
 		return stubResponse(200, `{"errors":["nope"]}`), nil
 	}
-	if _, err := api.NewOrdersPage(start, 1); err == nil {
+	if _, err := api.NewOrdersPage(context.Background(), start, 1); err == nil {
 		t.Error("malformed 200 body: want an error, got nil")
 	}
 }

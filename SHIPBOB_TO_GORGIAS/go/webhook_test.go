@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"strings"
@@ -19,7 +20,7 @@ func runWebhookTest(t *testing.T, dir string, triggers []map[string]any, metadat
 		opts.metadata = metadata
 	}
 	pandium := newTestPandium(t, opts)
-	result, err := runWebhook(pandium, gorgias, time.Now())
+	result, err := runWebhook(context.Background(), pandium, gorgias, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

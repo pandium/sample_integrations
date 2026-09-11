@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -19,13 +20,13 @@ var authURLToBaseURL = map[string]string{
 	"https://auth.shipbob.com":      "https://api.shipbob.com/2026-01",
 }
 
-const DefaultBaseURL = "https://api.shipbob.com/2026-01"
+const defaultBaseURL = "https://api.shipbob.com/2026-01"
 
 // resolveBaseURL decodes the JWT payload and maps its iss claim to an API base URL.
 func resolveBaseURL(token string) string {
 	fail := func(err error) string {
 		shipbobLogger.Error("could not resolve ShipBob base URL from token", "error", err)
-		return DefaultBaseURL
+		return defaultBaseURL
 	}
 
 	parts := strings.Split(token, ".")
@@ -48,15 +49,15 @@ func resolveBaseURL(token string) string {
 	if base, ok := authURLToBaseURL[iss]; ok {
 		return base
 	}
-	return DefaultBaseURL
+	return defaultBaseURL
 }
 
 // ShipBobClient is what cron.go depends on — satisfied by *ShipBobAPI and, in
 // tests, by a fake. Go has no monkey-patching, so this interface has to exist from
 // the start.
 type ShipBobClient interface {
-	NewOrdersPage(startDate time.Time, page int) ([]map[string]any, error)
-	UpdatedOrdersPage(startDate time.Time, page int) ([]map[string]any, error)
+	NewOrdersPage(ctx context.Context, startDate time.Time, page int) ([]map[string]any, error)
+	UpdatedOrdersPage(ctx context.Context, startDate time.Time, page int) ([]map[string]any, error)
 	UpdateDate(order map[string]any, startDate time.Time) time.Time
 }
 
@@ -87,8 +88,8 @@ func NewShipBobAPI(pandium *Pandium) (*ShipBobAPI, error) {
 // Only an exhausted query answers with an empty slice.
 // The caller stops paging there and commits its cursor, so a failure — or a
 // 200 carrying something other than a list — returns an error instead.
-func (s *ShipBobAPI) getOrders(params url.Values) ([]map[string]any, error) {
-	data, err := s.client.get("/order", params)
+func (s *ShipBobAPI) getOrders(ctx context.Context, params url.Values) ([]map[string]any, error) {
+	data, err := s.client.get(ctx, "/order", params)
 	if err != nil {
 		shipbobLogger.Error("ShipBob order fetch failed", "params", params.Encode(), "error", err)
 		return nil, err
@@ -111,13 +112,13 @@ func (s *ShipBobAPI) getOrders(params url.Values) ([]map[string]any, error) {
 }
 
 // NewOrdersPage is one page of orders created since startDate, oldest first.
-func (s *ShipBobAPI) NewOrdersPage(startDate time.Time, page int) ([]map[string]any, error) {
+func (s *ShipBobAPI) NewOrdersPage(ctx context.Context, startDate time.Time, page int) ([]map[string]any, error) {
 	params := url.Values{
 		"StartDate": {startDate.UTC().Format(time.RFC3339)},
 		"Page":      {fmt.Sprintf("%d", page)},
 		"SortOrder": {"Oldest"},
 	}
-	return s.getOrders(params)
+	return s.getOrders(ctx, params)
 }
 
 // UpdatedOrdersPage is one page of orders updated since startDate.
@@ -127,12 +128,12 @@ func (s *ShipBobAPI) NewOrdersPage(startDate time.Time, page int) ([]map[string]
 // oldest processed update keeps the sync conservative: a timed-out run never skips
 // an update, at the cost of some reprocessing (which is harmless — customer writes
 // are idempotent PUTs).
-func (s *ShipBobAPI) UpdatedOrdersPage(startDate time.Time, page int) ([]map[string]any, error) {
+func (s *ShipBobAPI) UpdatedOrdersPage(ctx context.Context, startDate time.Time, page int) ([]map[string]any, error) {
 	params := url.Values{
 		"LastUpdateStartDate": {startDate.UTC().Format(time.RFC3339)},
 		"Page":                {fmt.Sprintf("%d", page)},
 	}
-	orders, err := s.getOrders(params)
+	orders, err := s.getOrders(ctx, params)
 	if err != nil {
 		return nil, err
 	}

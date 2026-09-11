@@ -114,9 +114,8 @@ func formatID(v any) string {
 	}
 }
 
-// trimLongFraction cuts fractional seconds beyond 6 digits (ShipBob sends 7); Go's
-// time layouts choke on more than 9 but clamp does string-prefix comparisons that
-// assume a fixed 6-digit width, matching every other language's port here.
+// trimLongFraction cuts fractional seconds beyond 6 digits (ShipBob sends 7), matching
+// formatCursor's own precision so a round-tripped cursor still compares equal.
 var trimLongFraction = regexp.MustCompile(`(\.\d{6})\d+`)
 
 // parseTimestamp parses a ShipBob- or Pandium-shaped timestamp string, trying

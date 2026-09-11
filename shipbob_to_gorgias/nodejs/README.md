@@ -4,7 +4,7 @@ The plain-Node.js implementation of the [ShipBob to Gorgias sample](../README.md
 first for what the integration does and which parts of the Pandium platform it exercises;
 this page covers the code, and how to install, run, and test it.
 
-Node.js 24, `axios`, `node:test`. No TypeScript, no build step, no web server.
+Node.js 24, `axios`, `node:test`. No build step, no framework, no web server.
 
 ## Layout
 

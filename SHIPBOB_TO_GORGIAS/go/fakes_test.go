@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,7 +92,7 @@ func newRecordingGorgias(existingEmails ...string) *RecordingGorgias {
 	return r
 }
 
-func (r *RecordingGorgias) FindCustomer(email, externalID string) (map[string]any, error) {
+func (r *RecordingGorgias) FindCustomer(_ context.Context, email, externalID string) (map[string]any, error) {
 	key := email
 	if key == "" {
 		key = externalID
@@ -106,7 +107,7 @@ func (r *RecordingGorgias) FindCustomer(email, externalID string) (map[string]an
 	}, nil
 }
 
-func (r *RecordingGorgias) CreateCustomer(payload map[string]any) (float64, error) {
+func (r *RecordingGorgias) CreateCustomer(_ context.Context, payload map[string]any) (float64, error) {
 	id := float64(1000 + len(r.store))
 	key := asString(payload["external_id"])
 	if key == "" {
@@ -117,7 +118,7 @@ func (r *RecordingGorgias) CreateCustomer(payload map[string]any) (float64, erro
 	return id, nil
 }
 
-func (r *RecordingGorgias) UpdateCustomer(id float64, payload map[string]any) error {
+func (r *RecordingGorgias) UpdateCustomer(_ context.Context, id float64, payload map[string]any) error {
 	b, _ := json.Marshal(payload) // snapshot
 	var snapshot map[string]any
 	_ = json.Unmarshal(b, &snapshot)
@@ -125,7 +126,7 @@ func (r *RecordingGorgias) UpdateCustomer(id float64, payload map[string]any) er
 	return nil
 }
 
-func (r *RecordingGorgias) CreateTicket(payload map[string]any) (map[string]any, error) {
+func (r *RecordingGorgias) CreateTicket(_ context.Context, payload map[string]any) (map[string]any, error) {
 	r.Log.ticket = append(r.Log.ticket, payload)
 	return map[string]any{"id": float64(900 + len(r.Log.ticket))}, nil
 }
@@ -270,11 +271,11 @@ func (f *FakeShipBob) page(h pageHalf, pages [][]map[string]any, pageNum int) ([
 	return nil, nil
 }
 
-func (f *FakeShipBob) NewOrdersPage(_ time.Time, page int) ([]map[string]any, error) {
+func (f *FakeShipBob) NewOrdersPage(_ context.Context, _ time.Time, page int) ([]map[string]any, error) {
 	return f.page(halfNew, f.NewPages, page)
 }
 
-func (f *FakeShipBob) UpdatedOrdersPage(_ time.Time, page int) ([]map[string]any, error) {
+func (f *FakeShipBob) UpdatedOrdersPage(_ context.Context, _ time.Time, page int) ([]map[string]any, error) {
 	return f.page(halfUpdated, f.UpdatedPages, page)
 }
 

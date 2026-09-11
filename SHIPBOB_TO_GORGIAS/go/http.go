@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,20 +43,20 @@ func newRetryClient(baseURL, authorization string, backoff time.Duration, retryM
 	}
 }
 
-func (c *retryClient) get(path string, query url.Values) (any, error) {
+func (c *retryClient) get(ctx context.Context, path string, query url.Values) (any, error) {
 	full := c.baseURL + path
 	if len(query) > 0 {
 		full += "?" + query.Encode()
 	}
-	return c.send(http.MethodGet, full, nil)
+	return c.send(ctx, http.MethodGet, full, nil)
 }
 
-func (c *retryClient) post(path string, body any) (any, error) {
-	return c.send(http.MethodPost, c.baseURL+path, body)
+func (c *retryClient) post(ctx context.Context, path string, body any) (any, error) {
+	return c.send(ctx, http.MethodPost, c.baseURL+path, body)
 }
 
-func (c *retryClient) put(path string, body any) (any, error) {
-	return c.send(http.MethodPut, c.baseURL+path, body)
+func (c *retryClient) put(ctx context.Context, path string, body any) (any, error) {
+	return c.send(ctx, http.MethodPut, c.baseURL+path, body)
 }
 
 // send performs one request, retrying on a network error or a retryable status
@@ -64,7 +65,12 @@ func (c *retryClient) put(path string, body any) (any, error) {
 //
 // A response with an empty body decodes to (nil, nil), not an error — that's what
 // lets a caller distinguish "genuinely nothing here" from a real failure.
-func (c *retryClient) send(method, fullURL string, body any) (any, error) {
+//
+// The request is built with ctx, so a caller's deadline (e.g. the cron run's own
+// timeout) tears down an in-flight request instead of leaving it to finish on its
+// own; the backoff sleep between retries is also cut short the same way rather
+// than sleeping past a deadline that has already passed.
+func (c *retryClient) send(ctx context.Context, method, fullURL string, body any) (any, error) {
 	var bodyBytes []byte
 	if body != nil {
 		var err error
@@ -77,10 +83,14 @@ func (c *retryClient) send(method, fullURL string, body any) (any, error) {
 	var lastErr error
 	for attempt := 1; attempt <= c.maxAttempts; attempt++ {
 		if attempt > 1 {
-			time.Sleep(c.backoff * time.Duration(1<<(attempt-2)))
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(c.backoff * time.Duration(1<<(attempt-2))):
+			}
 		}
 
-		req, err := http.NewRequest(method, fullURL, bytes.NewReader(bodyBytes))
+		req, err := http.NewRequestWithContext(ctx, method, fullURL, bytes.NewReader(bodyBytes))
 		if err != nil {
 			return nil, fmt.Errorf("could not build request: %w", err)
 		}

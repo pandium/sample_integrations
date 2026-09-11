@@ -1,13 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
-	"os"
+	"context"
 	"reflect"
 	"sort"
-	"strings"
 	"testing"
 	"time"
 )
@@ -17,22 +13,6 @@ import (
 func ago(days int) string {
 	d := time.Now().Add(-time.Duration(days) * 24 * time.Hour).UTC()
 	return d.Format("2006-01-02T15:04:05") + ".1234567+00:00"
-}
-
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = w
-	fn()
-	w.Close()
-	os.Stdout = old
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String()
 }
 
 func TestClamp_BoundsCursorBetweenOneMonthAgoAndNow(t *testing.T) {
@@ -57,9 +37,7 @@ func TestRun_PagesUntilEmpty_UpsertsCustomer_AdvancesCursor(t *testing.T) {
 	gorgias := newRecordingGorgias()
 	pandium := newTestPandium(t, testPandiumOpts{secrets: gorgiasSecrets, config: map[string]string{"order_start_date": ago(20)}})
 
-	record, err := runCron(pandium, cronDeps{
-		ShipBob: shipbob, Gorgias: gorgias, ArmWatchdog: defaultArmWatchdog, Exit: os.Exit, Now: time.Now(),
-	})
+	record, err := runCron(context.Background(), pandium, cronDeps{ShipBob: shipbob, Gorgias: gorgias, Now: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,9 +81,7 @@ func TestRun_AdvancesUpdatedCursorToOldestAcrossPages(t *testing.T) {
 	gorgias := newRecordingGorgias()
 	pandium := newTestPandium(t, testPandiumOpts{secrets: gorgiasSecrets, config: map[string]string{"order_start_date": ago(20)}})
 
-	record, err := runCron(pandium, cronDeps{
-		ShipBob: shipbob, Gorgias: gorgias, ArmWatchdog: defaultArmWatchdog, Exit: os.Exit, Now: time.Now(),
-	})
+	record, err := runCron(context.Background(), pandium, cronDeps{ShipBob: shipbob, Gorgias: gorgias, Now: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,19 +93,14 @@ func TestRun_AdvancesUpdatedCursorToOldestAcrossPages(t *testing.T) {
 	}
 }
 
-type exitSignal struct{ code int }
-
-func TestTimeout_FlushesTheFinishedHalfAndLeavesTheInterruptedOne(t *testing.T) {
+func TestDeadline_FlushesTheFinishedHalfAndLeavesTheInterruptedOne(t *testing.T) {
 	// The two cursors resume differently. new_order_start_date climbs per order
 	// over an oldest-first query, so it is sound wherever the run stops.
 	// updated_order_start_date is the minimum across every page, so it only holds
 	// once the query is exhausted — an unread page can carry an older update —
-	// and a run cut short flushes the value it started with.
-	var capturedOnTimeout func()
-	armWatchdog := func(_ time.Duration, onTimeout func()) func() {
-		capturedOnTimeout = onTimeout
-		return func() {}
-	}
+	// and a run cut short leaves it where it started.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	now := time.Now()
 	start := ago(20)
@@ -140,45 +111,24 @@ func TestTimeout_FlushesTheFinishedHalfAndLeavesTheInterruptedOne(t *testing.T) 
 		{makeOrder(3, ago(9), "j@x.com")}, // never read
 	}
 	shipbob.OnPage = func(h pageHalf, page int) {
-		if h == halfUpdated && page == 2 && capturedOnTimeout != nil {
-			capturedOnTimeout()
+		if h == halfUpdated && page == 2 {
+			cancel() // simulates the deadline passing mid-query
 		}
 	}
 	gorgias := newRecordingGorgias()
 	pandium := newTestPandium(t, testPandiumOpts{secrets: gorgiasSecrets, config: map[string]string{"order_start_date": start}})
 
-	var caught any
-	output := captureStdout(t, func() {
-		defer func() { caught = recover() }()
-		_, _ = runCron(pandium, cronDeps{
-			ShipBob:     shipbob,
-			Gorgias:     gorgias,
-			ArmWatchdog: armWatchdog,
-			Exit:        func(code int) { panic(exitSignal{code}) },
-			Now:         now,
-		})
-	})
-
-	sig, ok := caught.(exitSignal)
-	if !ok {
-		t.Fatalf("expected an exitSignal panic, got %#v", caught)
-	}
-	if sig.code != 0 { // a timed-out run still succeeds, so progress merges
-		t.Errorf("exit code = %d, want 0", sig.code)
-	}
-
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var flushed map[string]any
-	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &flushed); err != nil {
-		t.Fatalf("could not parse flushed metadata %q: %s", output, err)
+	record, err := runCron(ctx, pandium, cronDeps{ShipBob: shipbob, Gorgias: gorgias, Now: now})
+	if err != nil { // a deadline stopping the run early is still a success
+		t.Fatalf("runCron returned an error for a clean deadline stop: %s", err)
 	}
 
 	wantNew := trimTo(ago(6), 26) // that half finished
-	if got := flushed["new_order_start_date"]; got != wantNew {
+	if got := record["new_order_start_date"]; got != wantNew {
 		t.Errorf("new_order_start_date = %v, want %v", got, wantNew)
 	}
 	wantUpdated := formatCursor(clamp(start, now)) // this one did not
-	if got := flushed["updated_order_start_date"]; got != wantUpdated {
+	if got := record["updated_order_start_date"]; got != wantUpdated {
 		t.Errorf("updated_order_start_date = %v, want %v", got, wantUpdated)
 	}
 }
@@ -197,9 +147,7 @@ func TestRun_FetchFailureEndsRunRatherThanCommittingCursor(t *testing.T) {
 	gorgias := newRecordingGorgias()
 	pandium := newTestPandium(t, testPandiumOpts{secrets: gorgiasSecrets, config: map[string]string{"order_start_date": ago(20)}})
 
-	_, err := runCron(pandium, cronDeps{
-		ShipBob: shipbob, Gorgias: gorgias, ArmWatchdog: defaultArmWatchdog, Exit: os.Exit, Now: time.Now(),
-	})
+	_, err := runCron(context.Background(), pandium, cronDeps{ShipBob: shipbob, Gorgias: gorgias, Now: time.Now()})
 	if err == nil {
 		t.Fatal("expected an error from the failed fetch, got nil")
 	}

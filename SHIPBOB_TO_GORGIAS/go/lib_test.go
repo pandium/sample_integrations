@@ -31,9 +31,8 @@ func TestWebhookDeliveries_ReadsBodyFromFile(t *testing.T) {
 	}
 }
 
-// TestWebhookDeliveries_SkipsUnreadableOrMissingFile is new coverage beyond
-// Python's suite (which only exercises the happy path indirectly via
-// webhook_trigger) — the file-read failure path is easy to regress silently.
+// TestWebhookDeliveries_SkipsUnreadableOrMissingFile covers the file-read
+// failure path directly, since it's easy to regress silently.
 func TestWebhookDeliveries_SkipsUnreadableOrMissingFile(t *testing.T) {
 	triggers := []map[string]any{
 		{"id": "t1", "mode": "webhook", "payload": map[string]any{"file": "/nonexistent/path.json"}},

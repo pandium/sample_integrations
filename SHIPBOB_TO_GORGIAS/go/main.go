@@ -21,6 +21,7 @@ func run(mode string, pandium *Pandium) (map[string]any, error) {
 }
 
 func main() {
+	loadDotEnv()
 	pandium := NewPandiumFromEnv()
 
 	mainLogger.Info("syncing ShipBob to Gorgias", "run_mode", pandium.RunMode())

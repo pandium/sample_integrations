@@ -52,7 +52,7 @@ fn flush_at_deadline(cursors: Arc<Mutex<Cursors>>, deadline: Duration) {
 ```
 
 There is nothing to cancel on the way out — a detached thread dies with the process when
-`main` returns, which is this design's answer to Python's `signal.alarm(0)`.
+`main` returns.
 
 **Mode dispatch** is a `match` on `PAN_CTX_RUN_MODE` in `src/main.rs`:
 
@@ -84,8 +84,8 @@ let metadata = match mode {
   ```
 
 Indexing a `Value` yields `Value::Null` for anything missing rather than panicking, which
-is why there is no `deep_get` helper here: `order["recipient"]["address"]["city"]` already
-does what the Python version needs a function for.
+is why there is no separate helper for nested lookups here: `order["recipient"]["address"]["city"]`
+already does the job on its own.
 
 **The customer key is an enum.** A ShipBob recipient often has no usable email, so both
 flows fall back to a synthetic key built from the recipient's name and address. Making
