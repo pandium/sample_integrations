@@ -105,6 +105,9 @@ func (g *GorgiasAPI) FindCustomer(ctx context.Context, email, externalID string)
 	}
 	first, _ := rows[0].(map[string]any)
 	id := formatID(first["id"])
+	if id == "" {
+		return nil, fmt.Errorf("gorgias customer search result has no usable id: %v", first)
+	}
 
 	detail, err := g.client.get(ctx, "/customers/"+id, nil)
 	if err != nil {
@@ -123,7 +126,10 @@ func (g *GorgiasAPI) CreateCustomer(ctx context.Context, payload map[string]any)
 		return 0, err
 	}
 	body, _ := res.(map[string]any)
-	id, _ := body["id"].(float64)
+	id, ok := body["id"].(float64)
+	if !ok {
+		return 0, fmt.Errorf("gorgias create customer response has no usable id: %v", res)
+	}
 	gorgiasLogger.Info("Customer created successfully")
 	return id, nil
 }
@@ -147,11 +153,13 @@ func (g *GorgiasAPI) CreateTicket(ctx context.Context, payload map[string]any) (
 		gorgiasLogger.Error("create ticket failed", "error", err)
 		return nil, err
 	}
-	ticket, _ := res.(map[string]any)
+	ticket, ok := res.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("gorgias create ticket response was not a ticket: %v", res)
+	}
 	return ticket, nil
 }
 
-// validEmail returns email if Gorgias would accept it, else "".
 // validEmail returns email if Gorgias would accept it, else "". Requiring the parsed
 // address to equal the input rejects anything mail.ParseAddress accepts beyond a bare
 // address, e.g. a display name like "Jane Doe <jane@example.com>".

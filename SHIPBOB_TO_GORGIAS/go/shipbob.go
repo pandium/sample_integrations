@@ -76,10 +76,11 @@ func NewShipBobAPI(pandium *Pandium) (*ShipBobAPI, error) {
 	if token == "" {
 		return nil, errors.New("PAN_SEC_SHIPBOB_ACCESS_TOKEN is required")
 	}
+	apiURL := resolveBaseURL(token)
 	return &ShipBobAPI{
-		apiURL: resolveBaseURL(token),
+		apiURL: apiURL,
 		// Exponential backoff: 3s, 6s, 12s, ... Only GET is ever called by this client.
-		client: newRetryClient(resolveBaseURL(token), "Bearer "+token, 3*time.Second, []string{"GET"}),
+		client: newRetryClient(apiURL, "Bearer "+token, 3*time.Second, []string{"GET"}),
 	}, nil
 }
 

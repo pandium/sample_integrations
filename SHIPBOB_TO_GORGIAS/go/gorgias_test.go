@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"testing"
+)
 
 func TestGorgiasAPI_BuildsBaseURLAndBearerHeader(t *testing.T) {
 	api, err := NewGorgiasAPI(NewPandium(nil, gorgiasSecrets, nil))
@@ -12,6 +16,47 @@ func TestGorgiasAPI_BuildsBaseURLAndBearerHeader(t *testing.T) {
 	}
 	if api.client.authorization != "Bearer gorgias-token-123" {
 		t.Errorf("authorization = %q, want %q", api.client.authorization, "Bearer gorgias-token-123")
+	}
+}
+
+func TestCreateCustomer_ErrorsOnAResponseWithNoUsableID(t *testing.T) {
+	api, err := NewGorgiasAPI(NewPandium(nil, gorgiasSecrets, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.client.maxAttempts = 1
+	api.client.doRequest = func(*http.Request) (*http.Response, error) { return stubResponse(200, ""), nil }
+
+	if _, err := api.CreateCustomer(context.Background(), map[string]any{}); err == nil {
+		t.Error("expected an error for an empty create-customer response, got nil")
+	}
+}
+
+func TestCreateTicket_ErrorsOnAResponseThatIsNotATicket(t *testing.T) {
+	api, err := NewGorgiasAPI(NewPandium(nil, gorgiasSecrets, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.client.maxAttempts = 1
+	api.client.doRequest = func(*http.Request) (*http.Response, error) { return stubResponse(200, "[]"), nil }
+
+	if _, err := api.CreateTicket(context.Background(), map[string]any{}); err == nil {
+		t.Error("expected an error for a non-ticket create-ticket response, got nil")
+	}
+}
+
+func TestFindCustomer_ErrorsWhenTheSearchResultHasNoUsableID(t *testing.T) {
+	api, err := NewGorgiasAPI(NewPandium(nil, gorgiasSecrets, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.client.maxAttempts = 1
+	api.client.doRequest = func(*http.Request) (*http.Response, error) {
+		return stubResponse(200, `{"data":[{"name":"no id here"}]}`), nil
+	}
+
+	if _, err := api.FindCustomer(context.Background(), "jane@example.com", ""); err == nil {
+		t.Error("expected an error for a search result with no usable id, got nil")
 	}
 }
 
