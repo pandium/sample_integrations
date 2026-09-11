@@ -26,11 +26,11 @@ export const pokemonToSlackMessage = (
             },
         ],
     }
-
-    if (pokemon.sprites.back_default) {
+    
+    if (pokemon.sprites.front_default) {
         message.blocks?.unshift({
             type: 'image',
-            image_url: pokemon.sprites.back_default,
+            image_url: pokemon.sprites.front_default,
             alt_text: `${pokemon.name} sprite`,
         })
     }
