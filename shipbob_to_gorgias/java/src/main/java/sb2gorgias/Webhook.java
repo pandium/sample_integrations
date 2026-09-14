@@ -9,12 +9,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** The webhook flow: any ShipBob order webhook -> a Gorgias ticket.
  *
@@ -37,7 +37,7 @@ import org.json.JSONObject;
  * Pandium verifies each delivery's signature before it ever reaches a run, so the bodies
  * handed to this file are already known to have come from ShipBob. */
 final class Webhook {
-    private static final Logger LOGGER = Pandium.newLogger("webhook");
+    private static final Logger LOGGER = LoggerFactory.getLogger("webhook");
 
     private static final Duration PRUNE_WINDOW = Duration.ofMinutes(30);
     private static final String SHIPMENT_TAG = "shipbob-shipment";
@@ -251,14 +251,13 @@ final class Webhook {
             try {
                 event = new JSONObject(delivery.body());
             } catch (JSONException e) {
-                LOGGER.log(Level.SEVERE, "webhook delivery is not valid JSON; delivery_id=" + delivery.id()
-                        + " error=" + e.getMessage());
+                LOGGER.error("webhook delivery is not valid JSON; delivery_id={}", delivery.id(), e);
                 continue;
             }
 
             String sid = shipmentId(event);
             if (sid.isEmpty()) {
-                LOGGER.log(Level.WARNING, "webhook delivery has no shipment id; skipping; delivery_id=" + delivery.id());
+                LOGGER.warn("webhook delivery has no shipment id; skipping; delivery_id={}", delivery.id());
                 continue;
             }
 
@@ -270,8 +269,7 @@ final class Webhook {
             }
             String eventKey = sid + ":" + status;
             if (processed.containsKey(eventKey)) {
-                LOGGER.log(Level.INFO, "shipment already ticketed; skipping duplicate; shipment_id=" + sid
-                        + " status=" + status);
+                LOGGER.info("shipment already ticketed; skipping duplicate; shipment_id={} status={}", sid, status);
                 continue;
             }
 
@@ -279,8 +277,7 @@ final class Webhook {
             try {
                 customerRef = resolveCustomer(gorgias, event);
             } catch (RuntimeException e) {
-                LOGGER.log(Level.SEVERE, "could not resolve a Gorgias customer for shipment; shipment_id=" + sid
-                        + " error=" + e.getMessage());
+                LOGGER.error("could not resolve a Gorgias customer for shipment; shipment_id={}", sid, e);
                 continue; // leave unprocessed so ShipBob's retry can try again
             }
 
@@ -288,18 +285,17 @@ final class Webhook {
             try {
                 ticket = gorgias.createTicket(buildTicket(event, customerRef));
             } catch (RuntimeException e) {
-                LOGGER.log(Level.SEVERE, "failed to open ticket for shipment; shipment_id=" + sid
-                        + " error=" + e.getMessage());
+                LOGGER.error("failed to open ticket for shipment; shipment_id={}", sid, e);
                 continue; // leave unprocessed so ShipBob's retry can try again
             }
 
             processed.put(eventKey, nowIso); // mark handled
             created++;
-            LOGGER.log(Level.INFO, "opened Gorgias ticket for shipment; ticket_id=" + ticket.opt("id")
-                    + " shipment_id=" + sid + " status=" + status);
+            LOGGER.info("opened Gorgias ticket for shipment; ticket_id={} shipment_id={} status={}",
+                    ticket.opt("id"), sid, status);
         }
 
-        LOGGER.log(Level.INFO, "webhook flow complete; tickets_opened=" + created + " events_tracked=" + processed.size());
+        LOGGER.info("webhook flow complete; tickets_opened={} events_tracked={}", created, processed.size());
         // Replaces the map (30-min pruned); shallow merge leaves the cron flow's cursor keys intact.
         JSONObject processedAny = new JSONObject();
         for (Map.Entry<String, String> entry : processed.entrySet()) {

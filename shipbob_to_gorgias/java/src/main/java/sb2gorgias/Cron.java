@@ -15,10 +15,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** The cron flow: ShipBob orders -> Gorgias customer sidebar.
  *
@@ -37,7 +38,7 @@ import org.json.JSONObject;
  * carry an older update - and a run cut short leaves it where it started. Re-syncing what it
  * covers again is harmless: customer writes are idempotent PUTs. */
 final class Cron {
-    private static final Logger LOGGER = Pandium.newLogger("cron");
+    private static final Logger LOGGER = LoggerFactory.getLogger("cron");
 
     private static final Duration ALARM_DURATION = Duration.ofSeconds(540); // self-imposed 9-min alarm
     static final Duration ONE_MONTH = Duration.ofDays(30);
@@ -146,8 +147,8 @@ final class Cron {
             try {
                 existing = gorgias.findCustomer(email.isEmpty() ? null : email, email.isEmpty() ? key : null);
             } catch (RuntimeException e) {
-                LOGGER.log(Level.SEVERE, "cannot fetch customer; skipping order; order_id="
-                        + Util.deepGet(order, "id", "") + " customer_key=" + key + " error=" + e.getMessage());
+                LOGGER.error("cannot fetch customer; skipping order; order_id={} customer_key={}",
+                        Util.deepGet(order, "id", ""), key, e);
                 return;
             }
 
@@ -159,8 +160,8 @@ final class Cron {
                 JSONObject data = dataObj instanceof JSONObject d ? d : new JSONObject();
                 Object pandiumObj = data.opt("pandium");
                 JSONObject pandium = pandiumObj instanceof JSONObject p ? p : new JSONObject();
-                if (!(pandium.opt("shipbob_orders") instanceof org.json.JSONArray)) {
-                    pandium.put("shipbob_orders", new org.json.JSONArray());
+                if (!(pandium.opt("shipbob_orders") instanceof JSONArray)) {
+                    pandium.put("shipbob_orders", new JSONArray());
                 }
                 data.put("pandium", pandium);
                 customer = new JSONObject();
@@ -174,7 +175,7 @@ final class Cron {
 
         JSONObject data = customer.optJSONObject("data");
         JSONObject pandium = data.optJSONObject("pandium");
-        org.json.JSONArray ordersAny = pandium.optJSONArray("shipbob_orders");
+        JSONArray ordersAny = pandium.optJSONArray("shipbob_orders");
         List<JSONObject> orders = new ArrayList<>();
         for (int i = 0; i < ordersAny.length(); i++) {
             if (ordersAny.opt(i) instanceof JSONObject o) {
@@ -182,7 +183,7 @@ final class Cron {
             }
         }
         orders = upsertOrder(orders, GorgiasApi.orderDataPayload(order), newestFirst);
-        pandium.put("shipbob_orders", new org.json.JSONArray(orders));
+        pandium.put("shipbob_orders", new JSONArray(orders));
 
         try {
             if (customer.has("id") && !customer.isNull("id")) {
@@ -191,7 +192,7 @@ final class Cron {
                 customer.put("id", gorgias.createCustomer(customer));
             }
         } catch (RuntimeException e) {
-            LOGGER.log(Level.SEVERE, "Failed to upsert Gorgias customer " + key + ": " + e.getMessage());
+            LOGGER.error("failed to upsert Gorgias customer {}", key, e);
         }
     }
 
@@ -264,7 +265,7 @@ final class Cron {
         CursorState state = new CursorState(formatCursor(newCursor), formatCursor(updatedCursor));
 
         Runnable cancel = deps.armWatchdog.arm(ALARM_DURATION, () -> {
-            LOGGER.log(Level.SEVERE, "approaching the run-time limit; flushing cursor for the next run");
+            LOGGER.error("approaching the run-time limit; flushing cursor for the next run");
             // Same writer the normal path uses, so there is exactly one route to stdout.
             pandium.updateMetadata(state.snapshot());
             deps.exit.accept(0); // timed-out run still counts as successful -> partial cursor merged
@@ -274,7 +275,7 @@ final class Cron {
         boolean newestFirst = "true".equalsIgnoreCase(pandium.config.get("newest_order_first"));
 
         // New orders: SortOrder=Oldest, so created_date advances forward monotonically.
-        LOGGER.log(Level.INFO, "syncing new ShipBob orders; start_date=" + state.getNew());
+        LOGGER.info("syncing new ShipBob orders; start_date={}", state.getNew());
         int page = 1;
         while (true) {
             List<JSONObject> orders;
@@ -288,7 +289,7 @@ final class Cron {
                 break;
             }
             for (JSONObject order : orders) {
-                LOGGER.log(Level.INFO, "processing new order; order_id=" + order.opt("id"));
+                LOGGER.info("processing new order; order_id={}", order.opt("id"));
                 processOrder(order, deps.gorgias, cache, newestFirst);
                 // created_date is YYYY-MM-DDThh:mm:ss.sssssss+00:00; trim to 26 chars for a
                 // valid (naive, microsecond) date-time.
@@ -301,7 +302,7 @@ final class Cron {
         }
 
         // Updated orders: keyed off shipment last_update_at (see ShipBobApi.updatedOrdersPage).
-        LOGGER.log(Level.INFO, "syncing updated ShipBob orders; start_date=" + state.getUpdated());
+        LOGGER.info("syncing updated ShipBob orders; start_date={}", state.getUpdated());
         page = 1;
         // Each page is sorted newest-first, but pages are not sorted relative to each other,
         // so the cursor is the minimum across every processed order - not whatever the last
@@ -322,7 +323,7 @@ final class Cron {
                 break;
             }
             for (JSONObject order : orders) {
-                LOGGER.log(Level.INFO, "processing updated order; order_id=" + order.opt("id"));
+                LOGGER.info("processing updated order; order_id={}", order.opt("id"));
                 processOrder(order, deps.gorgias, cache, newestFirst);
                 OffsetDateTime updateDate = deps.shipBob.updateDate(order, updatedCursor);
                 if (oldestUpdate == null || updateDate.isBefore(oldestUpdate)) {

@@ -3,13 +3,13 @@ package sb2gorgias;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Gorgias API client.
  *
@@ -23,10 +23,9 @@ import org.json.JSONObject;
  * fails is a platform concern and surfaces as Failed (Refresh) on the run, not as an error this
  * code has to handle. */
 final class GorgiasApi implements GorgiasClient {
-    private static final Logger LOGGER = Pandium.newLogger("gorgias");
+    private static final Logger LOGGER = LoggerFactory.getLogger("gorgias");
 
-    // Mirrors the check the older integration used, so a recipient email found here is one
-    // Gorgias would actually accept.
+    // Only a recipient email Gorgias would actually accept counts as valid.
     private static final Pattern EMAIL_RE = Pattern.compile(
             "([-!#-'*+/-9=?A-Z^-~]+(\\.[-!#-'*+/-9=?A-Z^-~]+)*|\"([\\]!#-\\[^-~ \\t]|(\\\\[\\t -~]))+\")"
             + "@([-!#-'*+/-9=?A-Z^-~]+(\\.[-!#-'*+/-9=?A-Z^-~]+)*|\\[[\\t -Z^-~]*])"
@@ -65,7 +64,7 @@ final class GorgiasApi implements GorgiasClient {
      * customer, so no pagination is needed. */
     @Override
     public JSONObject findCustomer(String email, String externalId) {
-        LOGGER.log(Level.INFO, "looking for gorgias customer: " + email + ", " + externalId);
+        LOGGER.info("looking for gorgias customer: {}, {}", email, externalId);
         Map<String, String> query;
         if (email != null && !email.isEmpty()) {
             query = Map.of("email", email.toLowerCase());
@@ -79,51 +78,51 @@ final class GorgiasApi implements GorgiasClient {
         JSONObject body = res instanceof JSONObject j ? j : new JSONObject();
         JSONArray rows = body.optJSONArray("data");
         if (rows == null || rows.isEmpty()) {
-            LOGGER.log(Level.INFO, "Customer not found");
+            LOGGER.info("customer not found");
             return null;
         }
 
         JSONObject first = rows.optJSONObject(0);
         Object id = first == null ? null : first.opt("id");
         Object detail = httpClient.get("/customers/" + id, null);
-        LOGGER.log(Level.INFO, "Customer found");
+        LOGGER.info("customer found");
         return detail instanceof JSONObject j ? j : null;
     }
 
     @Override
     public long createCustomer(JSONObject payload) {
-        LOGGER.log(Level.INFO, "creating new gorgias customer");
+        LOGGER.info("creating new gorgias customer");
         Object res;
         try {
             res = httpClient.post("/customers", payload);
         } catch (RuntimeException e) {
-            LOGGER.log(Level.SEVERE, "Create customer failed: " + e.getMessage());
+            LOGGER.error("create customer failed", e);
             throw e;
         }
-        LOGGER.log(Level.INFO, "Customer created successfully");
+        LOGGER.info("customer created successfully");
         return res instanceof JSONObject j ? j.optLong("id") : 0;
     }
 
     @Override
     public void updateCustomer(long id, JSONObject payload) {
-        LOGGER.log(Level.INFO, "updating gorgias customer " + id);
+        LOGGER.info("updating gorgias customer {}", id);
         try {
             httpClient.put("/customers/" + id, payload);
         } catch (RuntimeException e) {
-            LOGGER.log(Level.SEVERE, "Update customer " + id + " failed: " + e.getMessage());
+            LOGGER.error("update customer {} failed", id, e);
             throw e;
         }
-        LOGGER.log(Level.INFO, "customer updated");
+        LOGGER.info("customer updated");
     }
 
     @Override
     public JSONObject createTicket(JSONObject payload) {
-        LOGGER.log(Level.INFO, "creating gorgias ticket");
+        LOGGER.info("creating gorgias ticket");
         Object res;
         try {
             res = httpClient.post("/tickets", payload);
         } catch (RuntimeException e) {
-            LOGGER.log(Level.SEVERE, "Create ticket failed: " + e.getMessage());
+            LOGGER.error("create ticket failed", e);
             throw e;
         }
         return res instanceof JSONObject j ? j : new JSONObject();

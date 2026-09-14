@@ -57,6 +57,8 @@ final class FakeShipBobClient implements ShipBobClient {
  * catch (RuntimeException) blocks around the ShipBob calls - it must unwind past them
  * untouched, the same way a real process exit would never return control to that code either. */
 final class SimulatedExit extends Error {
+    private static final long serialVersionUID = 1L;
+
     final int code;
 
     SimulatedExit(int code) {
