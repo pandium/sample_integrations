@@ -1,12 +1,11 @@
 package sb2gorgias;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class Main {
-    private static final Logger LOGGER = Pandium.newLogger("main");
+    private static final Logger LOGGER = LoggerFactory.getLogger("main");
 
     private Main() {
     }
@@ -20,13 +19,13 @@ final class Main {
 
     public static void main(String[] args) {
         Pandium pandium = Pandium.fromEnv();
-        LOGGER.log(Level.INFO, "Syncing ShipBob to Gorgias; this run is in mode: " + pandium.runMode());
+        LOGGER.info("syncing ShipBob to Gorgias; run_mode={}", pandium.runMode());
 
         JSONObject metadata;
         try {
             metadata = run(pandium.runMode(), pandium);
         } catch (RuntimeException e) {
-            LOGGER.log(Level.SEVERE, "run failed: " + e.getMessage());
+            LOGGER.error("run failed", e);
             System.exit(1);
             return;
         }

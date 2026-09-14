@@ -4,44 +4,17 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Formatter;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
+import io.github.cdimascio.dotenv.Dotenv;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
-/**
- * Formats log lines as "[timestamp] [module] LEVEL: message". Logs go to stderr; stdout is
- * reserved for the JSON metadata Pandium reads back. Prints Level.SEVERE as "ERROR", matching
- * the other language ports - java.util.logging's own naming is the outlier here.
- */
-final class LineFormatter extends Formatter {
-    private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-    private final String module;
-
-    LineFormatter(String module) {
-        this.module = module;
-    }
-
-    @Override
-    public String format(LogRecord record) {
-        String timestamp = TIMESTAMP_FORMAT.format(Instant.ofEpochMilli(record.getMillis()).atZone(ZoneId.systemDefault()));
-        String level = record.getLevel() == Level.SEVERE ? "ERROR" : record.getLevel().getName();
-        return String.format("[%s] [%s] %s: %s%n", timestamp, module, level, record.getMessage());
-    }
-}
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** One webhook delivery handed to this run: the raw request body, plus the trigger id, which
  * is useful for correlating with the run log. */
@@ -55,7 +28,7 @@ record WebhookDelivery(String id, String body) {
  * methods instead.
  */
 final class Pandium {
-    private static final Logger LOGGER = newLogger("lib");
+    private static final Logger LOGGER = LoggerFactory.getLogger("lib");
 
     final Map<String, String> config;
     final Map<String, String> secrets;
@@ -69,14 +42,21 @@ final class Pandium {
         this.context = context;
     }
 
-    /** Returns a logger scoped to the calling file, named after it. */
-    static Logger newLogger(String module) {
-        Logger logger = Logger.getAnonymousLogger();
-        logger.setUseParentHandlers(false);
-        ConsoleHandler handler = new ConsoleHandler();
-        handler.setFormatter(new LineFormatter(module));
-        logger.addHandler(handler);
-        return logger;
+    // Reads a local .env for dev, merged with the real environment (which always wins); any
+    // failure to read .env - missing, malformed, unreadable - falls back to the real environment
+    // alone, since a dev-only convenience file must never be able to block a run.
+    private static final Map<String, String> RAW_ENV = loadEnv();
+
+    private static Map<String, String> loadEnv() {
+        try {
+            Map<String, String> raw = new HashMap<>();
+            for (var entry : Dotenv.configure().ignoreIfMissing().ignoreIfMalformed().load().entries()) {
+                raw.put(entry.getKey(), entry.getValue());
+            }
+            return raw;
+        } catch (RuntimeException e) {
+            return System.getenv();
+        }
     }
 
     static Pandium fromEnv() {
@@ -87,7 +67,7 @@ final class Pandium {
      * lower-casing the remaining key. */
     private static Map<String, String> fromEnvPrefix(String prefix) {
         Map<String, String> result = new HashMap<>();
-        for (Map.Entry<String, String> entry : System.getenv().entrySet()) {
+        for (Map.Entry<String, String> entry : RAW_ENV.entrySet()) {
             if (entry.getKey().startsWith(prefix)) {
                 result.put(entry.getKey().substring(prefix.length()).toLowerCase(), entry.getValue());
             }
@@ -110,7 +90,7 @@ final class Pandium {
         try {
             return new JSONArray(raw);
         } catch (JSONException e) {
-            LOGGER.log(Level.SEVERE, "could not parse run triggers as JSON: " + raw + ": " + e.getMessage());
+            LOGGER.error("could not parse run triggers as JSON: {}", raw, e);
             return new JSONArray();
         }
     }
@@ -130,7 +110,7 @@ final class Pandium {
             JSONObject payload = trigger.optJSONObject("payload");
             String file = payload == null ? null : payload.optString("file", null);
             if (file == null || file.isEmpty()) {
-                LOGGER.log(Level.WARNING, "webhook trigger " + trigger.opt("id") + " has no payload file");
+                LOGGER.warn("webhook trigger {} has no payload file", trigger.opt("id"));
                 continue;
             }
             try {
@@ -138,7 +118,7 @@ final class Pandium {
                 Object idVal = trigger.opt("id");
                 deliveries.add(new WebhookDelivery(idVal == null ? "" : String.valueOf(idVal), body));
             } catch (IOException e) {
-                LOGGER.log(Level.SEVERE, "could not read webhook payload " + file + ": " + e.getMessage());
+                LOGGER.error("could not read webhook payload {}", file, e);
             }
         }
         return deliveries;
@@ -160,7 +140,7 @@ final class Pandium {
             String raw = Files.readString(Paths.get(filename), StandardCharsets.UTF_8);
             metadataCache = new JSONObject(raw);
         } catch (IOException | JSONException e) {
-            LOGGER.log(Level.SEVERE, "could not read tenant metadata from " + filename + ": " + e.getMessage());
+            LOGGER.error("could not read tenant metadata from {}", filename, e);
         }
         return metadataCache;
     }
@@ -170,7 +150,7 @@ final class Pandium {
      * this call replaces it. */
     void updateMetadata(JSONObject metadata) {
         String serialized = metadata.toString();
-        LOGGER.log(Level.INFO, "updating metadata with " + serialized);
+        LOGGER.info("updating metadata with {}", serialized);
         System.out.println(serialized);
     }
 }

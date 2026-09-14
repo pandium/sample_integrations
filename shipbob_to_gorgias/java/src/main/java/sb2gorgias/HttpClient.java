@@ -1,6 +1,7 @@
 package sb2gorgias;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
@@ -10,9 +11,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
 
-import kong.unirest.HttpResponse;
-import kong.unirest.Unirest;
-import kong.unirest.UnirestException;
+import kong.unirest.core.HttpResponse;
+import kong.unirest.core.Unirest;
+import kong.unirest.core.UnirestException;
 
 /** A small HTTP client with exponential backoff retry, scoped to one API's base URL and auth
  * header. requester is swappable so tests can stub the network without a full HTTP mock. */
@@ -131,7 +132,7 @@ final class HttpClient {
     }
 
     private static String encode(String s) {
-        return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8);
+        return URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 
     private static void sleep(Duration d) {

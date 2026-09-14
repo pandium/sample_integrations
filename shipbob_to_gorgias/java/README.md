@@ -4,14 +4,14 @@ The Java implementation of the [ShipBob to Gorgias sample](../README.md). Read t
 for what the integration does and which parts of the Pandium platform it exercises; this page
 covers the code, and how to build, run, and test it.
 
-Java 25, Maven, `unirest-java`, `org.json`, JUnit 5. No framework, no web server.
+Java 25, Maven, `unirest-java-core`, `org.json`, JUnit 5. No framework, no web server.
 
 ## Layout
 
 ```
 java/
 ├── PANDIUM.yaml                     manifest: runtime, configs, metadata schema
-├── pom.xml                          dependencies (unirest-java, org.json, JUnit)
+├── pom.xml                          dependencies (unirest-java-core, org.json, JUnit)
 ├── src/main/java/sb2gorgias/
 │   ├── Main.java                     entry point; dispatches on run mode
 │   ├── Lib.java                       the Pandium runtime contract: config, secrets, context, metadata
@@ -25,8 +25,9 @@ java/
 
 `Lib.java` is the file to read first — the whole platform contract in one file: `PAN_CFG_*`/
 `PAN_SEC_*` as plain maps, `PAN_CTX_*` as named methods, the metadata file read, and the
-single stdout write that hands metadata back to Pandium. It also defines `newLogger`, which
-every other file gets its own named `java.util.logging.Logger` instance from.
+single stdout write that hands metadata back to Pandium. Logging is SLF4J; every file gets its
+own named `Logger` via `LoggerFactory.getLogger`, with format and level configured in
+`src/main/resources/logback.xml`.
 
 `ShipBobClient`/`GorgiasClient` exist because Java has no runtime monkey-patching — `Cron`
 and `Webhook` depend on the interfaces, production wiring uses the real `*Api` classes, and
@@ -57,8 +58,7 @@ of a full parse, in `GorgiasApi.java` — ShipBob timestamps are UTC-only and th
 display-only value, so a full `java.time` parse would be more work for no behavioral gain.
 
 **HTTP retry** is hand-rolled in `HttpClient.java` (exponential backoff, a small set of
-retryable status codes) because `unirest-java` has no retry support of its own — the same gap
-Go's port had to fill for its own HTTP stack.
+retryable status codes) because `unirest-java-core` has no retry support of its own.
 
 ## Prerequisites
 
@@ -117,8 +117,8 @@ run against.
 
 ### With environment variables directly
 
-Pandium hands every value over as a plain environment variable in production — no `.env`
-loader is built into this port, so export them directly:
+Pandium hands every value over as a plain environment variable in production. Locally, either export them directly or drop a `.env` file in this directory — a real environment variable
+still wins over the same key in `.env`:
 
 ```bash
 export PAN_SEC_SHIPBOB_ACCESS_TOKEN=eyJ...

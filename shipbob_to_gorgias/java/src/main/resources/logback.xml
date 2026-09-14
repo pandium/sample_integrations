@@ -1,0 +1,14 @@
+<configuration>
+    <!-- Logs go to stderr; stdout is reserved for the JSON metadata Pandium reads back. -->
+    <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <pattern>[%d{yyyy-MM-dd HH:mm:ss}] [%logger{0}] %level: %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Set LOG_LEVEL (e.g. to DEBUG) to change verbosity without rebuilding. -->
+    <root level="${LOG_LEVEL:-INFO}">
+        <appender-ref ref="STDERR"/>
+    </root>
+</configuration>

@@ -14,11 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** ShipBob API client - reads orders for the cron sync.
  *
@@ -26,7 +26,7 @@ import org.json.JSONObject;
  * the token's issuer (iss) claim, so the same code targets prod, sandbox, or QA depending on
  * which token the tenant connected. */
 final class ShipBobApi implements ShipBobClient {
-    private static final Logger LOGGER = Pandium.newLogger("shipbob");
+    private static final Logger LOGGER = LoggerFactory.getLogger("shipbob");
 
     // ShipBob issues tokens from different auth hosts per environment; map each to its
     // matching API base URL. Anything unrecognized falls back to prod.
@@ -59,7 +59,7 @@ final class ShipBobApi implements ShipBobClient {
             String iss = claims.optString("iss", null);
             return AUTH_URL_TO_BASE_URL.getOrDefault(iss, DEFAULT_BASE_URL);
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Could not resolve ShipBob base URL from token: " + e.getMessage());
+            LOGGER.warn("could not resolve ShipBob base URL from token", e);
             return DEFAULT_BASE_URL;
         }
     }
@@ -72,7 +72,7 @@ final class ShipBobApi implements ShipBobClient {
         try {
             data = httpClient.get("/order", params);
         } catch (RuntimeException e) {
-            LOGGER.log(Level.SEVERE, "ShipBob order fetch failed (" + params + "): " + e.getMessage());
+            LOGGER.error("ShipBob order fetch failed ({})", params, e);
             throw e;
         }
         if (data == null || data == JSONObject.NULL) {
