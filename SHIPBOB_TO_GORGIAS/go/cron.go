@@ -280,9 +280,7 @@ newOrdersLoop:
 	// construction, later than the starting cursor, so folding that in would pin
 	// the cursor there forever, and a partial minimum would sit newer than the
 	// pages still unread. exhausted tracks whether that end was actually reached —
-	// stopping early (the deadline passing mid-loop) must leave the cursor where
-	// it started, same as it always has, even though the loop below can now keep
-	// running past the point a goroutine-based deadline would have killed it.
+	// stopping early (the deadline passing mid-loop) must leave the cursor where it started.
 	var oldestUpdate *time.Time
 	exhausted := false
 updatedOrdersLoop:

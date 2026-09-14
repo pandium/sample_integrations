@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 var mainLogger = newLogger("main")
@@ -21,7 +23,7 @@ func run(mode string, pandium *Pandium) (map[string]any, error) {
 }
 
 func main() {
-	loadDotEnv()
+	_ = godotenv.Load()
 	pandium := NewPandiumFromEnv()
 
 	mainLogger.Info("syncing ShipBob to Gorgias", "run_mode", pandium.RunMode())
