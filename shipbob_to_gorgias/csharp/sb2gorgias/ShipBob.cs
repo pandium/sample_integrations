@@ -211,7 +211,7 @@ public sealed class ShipBobClient : IOrders, IDisposable
         {
             page = await _api.GetAsync("order", query, token);
         }
-        catch (Exception error) when (error is not OperationCanceledException)
+        catch (Exception error) when (!token.IsCancellationRequested)
         {
             throw new InvalidOperationException($"fetching ShipBob orders ({Describe(query)})", error);
         }

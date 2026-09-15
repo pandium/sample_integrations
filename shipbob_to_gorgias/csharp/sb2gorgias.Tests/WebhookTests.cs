@@ -96,4 +96,23 @@ public class WebhookTests
         Assert.Contains("4 x Pinnacle Shampoo (PIN-100)", body);
         Assert.Contains("107414278:OnHold", processed.Keys);
     }
+
+    [Fact]
+    public async Task TheRunDeadlineEndsTheBatchWithTheEventsTicketedSoFar()
+    {
+        // Cancelling is not a failure: the flow returns, the run exits 0, and Pandium merges
+        // processed_events for the tickets that were opened, so a delivery presented again
+        // is deduped rather than ticketed twice.
+        using var deadline = new CancellationTokenSource();
+        var gorgias = new RecordingGorgias("jane@example.com") { OnTicket = _ => deadline.Cancel() };
+        var processed = new Dictionary<string, string>();
+
+        await new WebhookFlow(gorgias, NullLogger<WebhookFlow>.Instance).ProcessAsync(
+            [Delivery("t1", ShipmentEvent(1, "Delivered")), Delivery("t2", ShipmentEvent(2, "Delivered"))],
+            processed, Now, deadline.Token);
+
+        // The first delivery was ticketed and recorded; the second was never reached.
+        Assert.Single(gorgias.Tickets);
+        Assert.Equal(["1:Delivered"], processed.Keys);
+    }
 }

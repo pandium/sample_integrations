@@ -112,7 +112,7 @@ public sealed class CronFlow(IOrders shipbob, IHelpdesk gorgias, ILogger<CronFlo
             await SyncNewOrdersAsync(cursors, customers, newestFirst, token);
             await SyncUpdatedOrdersAsync(cursors, customers, newestFirst, now, token);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // The deadline a minute inside Pandium's run limit. Returning normally is the
             // point: the run ends successfully, Pandium merges the cursors as they stand,
@@ -225,7 +225,7 @@ public sealed class CronFlow(IOrders shipbob, IHelpdesk gorgias, ILogger<CronFlo
             {
                 customer = await LookUpAsync(recipient, key, token);
             }
-            catch (Exception error) when (error is not OperationCanceledException)
+            catch (Exception error) when (!token.IsCancellationRequested)
             {
                 logger.LogError(
                     error, "skipping order {Id} — cannot fetch customer {Key}", order.Field("id"), key.Value);
@@ -250,7 +250,7 @@ public sealed class CronFlow(IOrders shipbob, IHelpdesk gorgias, ILogger<CronFlo
                 customer.Id = await gorgias.CreateCustomerAsync(customer.Payload(), token);
             }
         }
-        catch (Exception error) when (error is not OperationCanceledException)
+        catch (Exception error) when (!token.IsCancellationRequested)
         {
             logger.LogError(error, "failed to upsert Gorgias customer {Key}", key.Value);
         }

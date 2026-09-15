@@ -44,26 +44,25 @@ using var deadline = new CancellationTokenSource(Deadline);
 ```
 
 The sync checks it as it hands over each order, and `SyncAsync` treats the cancellation as
-an outcome rather than an error (`Cron.cs`):
+an outcome rather than an error (`Cron.cs`); `WebhookFlow.ProcessAsync` does the same
+between deliveries:
 
 ```csharp
-catch (OperationCanceledException)
+catch (OperationCanceledException) when (token.IsCancellationRequested)
 {
     logger.LogWarning("approaching the run-time limit — flushing the cursor for the next run");
 }
 ```
 
-Returning normally is the point: `Program.Main` writes the cursor as it stands and exits
-`0`, so Pandium counts the run as a success and merges the partial cursor. Because the
-same token reaches `HttpClient.SendAsync`, a request still in flight at the deadline is
-torn down rather than waited on.
+Because the flow returns normally, `Program.Main` writes the metadata as it stands and
+exits `0`, so Pandium counts the run as a success and merges the partial cursor, or the
+`processed_events` for the tickets a webhook run did open. Because the same token reaches
+`HttpClient.SendAsync`, a request still in flight at the deadline is torn down rather than
+waited on.
 
-This is the one place the C# version differs structurally from the other implementations,
-which flush from a watchdog thread or a signal handler. Cooperative cancellation is the
-idiom here, and it costs nothing: there is one thread, so the cursor is an ordinary
-mutable object rather than something shared under a lock, and the deadline behaviour is
-testable — `TheRunDeadlineEndsTheSyncWithTheCursorItHadReached` cancels between two pages
-and asserts on what the run would have written.
+The deadline behaviour is testable — `TheRunDeadlineEndsTheSyncWithTheCursorItHadReached`
+cancels between two pages and asserts on what the run would have written, and
+`TheRunDeadlineEndsTheBatchWithTheEventsTicketedSoFar` does the same for a webhook batch.
 
 **Paging is an async iterator.** Both halves of the sync page until an empty page comes
 back, which `Cron.cs` expresses once:
@@ -90,10 +89,9 @@ private static async IAsyncEnumerable<JsonNode?> OrdersUntilExhaustedAsync(
 }
 ```
 
-Laziness is load-bearing, not decoration: a page is fetched only once the previous one has
-been processed and the cursor has moved with it, which is what keeps a mid-run flush
-honest about how far the sync actually got. Building the whole backlog into a list first
-would fetch every page before the first order was written.
+A page is fetched only once the previous one has been processed and the cursor has moved
+with it, so a mid-run flush accurately reports how far the sync actually got. Building the
+whole backlog into a list first would fetch every page before the first order was written.
 
 **Two styles of deserialization**, chosen by what each flow does with the data:
 
@@ -179,12 +177,14 @@ with in-memory doubles and a `NullLogger`, so the flow's real logic runs without
 a token, or an environment variable.
 
 **Failures are exceptions, not a result type.** An exception thrown by the ShipBob client
-travels out of the async iterator and out of `SyncAsync` on its own, which is exactly the
-behaviour the design needs. `Main` catches it, logs it, and returns a non-zero exit code
-having written nothing to stdout — leaving the tenant's stored metadata as the last
-successful run left it. The `when (error is not OperationCanceledException)` filters on the
-inner `catch`es are what keep the deadline from being swallowed by a handler meant for a
-failed API call.
+travels out of the async iterator and out of `SyncAsync` on its own. `Main` catches it,
+logs it, and returns a non-zero exit code having written nothing to stdout — leaving the
+tenant's stored metadata as the last successful run left it. The
+`when (!token.IsCancellationRequested)` filters on the inner `catch`es are what keep the
+deadline from being swallowed by a handler meant for a failed API call. They test the
+token rather than the exception type because an `HttpClient` timeout also surfaces as an
+`OperationCanceledException`, and that one is a failure for a single item, not the run
+deadline.
 
 ## Prerequisites
 
@@ -201,7 +201,7 @@ That produces `publish/sb2gorgias.dll`, which is what `PANDIUM.yaml` runs.
 
 ## Running the tests
 
-Seven tests, one per behaviour worth understanding before you copy this sample. They run
+Eight tests, one per behaviour worth understanding before you copy this sample. They run
 both flows end to end with no network access and no credentials:
 
 ```bash
@@ -210,9 +210,9 @@ dotnet test
 
 ```
 Test run summary: Passed!
-  total: 7
+  total: 8
   failed: 0
-  succeeded: 7
+  succeeded: 8
   skipped: 0
 ```
 
@@ -222,7 +222,8 @@ Test run summary: Passed!
   cursor it had reached.
 - **`WebhookTests`** — a delivery opens a ticket and writes only processed events; a
   repeated status is dropped but the next status still tickets; a recipient with no email
-  gets a customer keyed on their address.
+  gets a customer keyed on their address; the run deadline ends the batch with the events
+  ticketed so far.
 
 `Fakes.cs` implements the same `IOrders` and `IHelpdesk` interfaces the real clients do, so
 the flows under test run their real logic.

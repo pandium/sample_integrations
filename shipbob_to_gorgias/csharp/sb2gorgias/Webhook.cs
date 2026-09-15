@@ -70,7 +70,8 @@ public sealed class WebhookFlow(IHelpdesk gorgias, ILogger<WebhookFlow> logger)
 
     /// <summary>
     /// Open a ticket for every delivery that has not been ticketed already, marking each
-    /// one handled in <paramref name="processed"/> as it goes.
+    /// one handled in <paramref name="processed"/> as it goes. The run deadline ends the
+    /// loop early and returns normally, so the events ticketed so far are still saved.
     /// </summary>
     public async Task ProcessAsync(
         IReadOnlyList<WebhookDelivery> deliveries,
@@ -81,54 +82,66 @@ public sealed class WebhookFlow(IHelpdesk gorgias, ILogger<WebhookFlow> logger)
         var ticketedAt = now.ToString("O", CultureInfo.InvariantCulture);
         var opened = 0;
 
-        foreach (var delivery in deliveries)
+        try
         {
-            if (Read(delivery) is not { } shipment)
+            foreach (var delivery in deliveries)
             {
-                continue;
-            }
+                token.ThrowIfCancellationRequested();
 
-            if (shipment.ShipmentKey is not { } shipmentId)
-            {
-                logger.LogWarning("webhook delivery {Id} has no shipment id", delivery.Id);
-                continue;
-            }
+                if (Read(delivery) is not { } shipment)
+                {
+                    continue;
+                }
 
-            // Every order webhook gets a ticket, whatever the status: the status is part of
-            // the dedupe key, never a filter.
-            var status = shipment.ReportedStatus;
-            var eventKey = $"{shipmentId}:{status}";
-            if (processed.ContainsKey(eventKey))
-            {
-                logger.LogInformation("shipment {Id} is already ticketed as {Status}; skipping", shipmentId, status);
-                continue;
-            }
+                if (shipment.ShipmentKey is not { } shipmentId)
+                {
+                    logger.LogWarning("webhook delivery {Id} has no shipment id", delivery.Id);
+                    continue;
+                }
 
-            long customerId;
-            try
-            {
-                customerId = await ResolveCustomerAsync(shipment, token);
-            }
-            catch (Exception error) when (error is not OperationCanceledException)
-            {
-                // Left unprocessed on purpose, so ShipBob's retry gets another go.
-                logger.LogError(error, "no Gorgias customer for shipment {Id}", shipmentId);
-                continue;
-            }
+                // Every order webhook gets a ticket, whatever the status: the status is part of
+                // the dedupe key, never a filter.
+                var status = shipment.ReportedStatus;
+                var eventKey = $"{shipmentId}:{status}";
+                if (processed.ContainsKey(eventKey))
+                {
+                    logger.LogInformation("shipment {Id} is already ticketed as {Status}; skipping", shipmentId, status);
+                    continue;
+                }
 
-            try
-            {
-                var ticket = await gorgias.CreateTicketAsync(BuildTicket(shipment, customerId), token);
-                logger.LogInformation(
-                    "opened Gorgias ticket {Ticket} for shipment {Id} ({Status})",
-                    ticket.Field("id"), shipmentId, status);
-                processed[eventKey] = ticketedAt;
-                opened++;
+                long customerId;
+                try
+                {
+                    customerId = await ResolveCustomerAsync(shipment, token);
+                }
+                catch (Exception error) when (!token.IsCancellationRequested)
+                {
+                    // Left unprocessed on purpose, so ShipBob's retry gets another go.
+                    logger.LogError(error, "no Gorgias customer for shipment {Id}", shipmentId);
+                    continue;
+                }
+
+                try
+                {
+                    var ticket = await gorgias.CreateTicketAsync(BuildTicket(shipment, customerId), token);
+                    logger.LogInformation(
+                        "opened Gorgias ticket {Ticket} for shipment {Id} ({Status})",
+                        ticket.Field("id"), shipmentId, status);
+                    processed[eventKey] = ticketedAt;
+                    opened++;
+                }
+                catch (Exception error) when (!token.IsCancellationRequested)
+                {
+                    logger.LogError(error, "failed to open a ticket for {Id}", shipmentId);
+                }
             }
-            catch (Exception error) when (error is not OperationCanceledException)
-            {
-                logger.LogError(error, "failed to open a ticket for {Id}", shipmentId);
-            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            // The deadline a minute inside Pandium's run limit. Returning normally lets the run
+            // save processed_events for the tickets it did open, so a delivery presented again
+            // is deduped rather than ticketed twice.
+            logger.LogWarning("approaching the run-time limit — saving the events ticketed so far");
         }
 
         logger.LogInformation(

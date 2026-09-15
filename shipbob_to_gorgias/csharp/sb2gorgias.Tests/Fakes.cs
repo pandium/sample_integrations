@@ -86,6 +86,9 @@ public sealed class RecordingGorgias(params string[] known) : IHelpdesk
 
     public List<JsonObject> Tickets { get; } = [];
 
+    /// <summary>Runs as each ticket is opened — a test uses it to fire the run deadline.</summary>
+    public Action<JsonObject>? OnTicket { get; set; }
+
     public Task<JsonObject?> FindCustomerAsync(CustomerKey key, CancellationToken token) =>
         Task.FromResult(_customers.TryGetValue(key.Value, out var id)
             ? new JsonObject
@@ -116,6 +119,7 @@ public sealed class RecordingGorgias(params string[] known) : IHelpdesk
     public Task<JsonNode?> CreateTicketAsync(JsonObject payload, CancellationToken token)
     {
         Tickets.Add(payload);
+        OnTicket?.Invoke(payload);
         return Task.FromResult<JsonNode?>(new JsonObject { ["id"] = 900L + Tickets.Count });
     }
 }
