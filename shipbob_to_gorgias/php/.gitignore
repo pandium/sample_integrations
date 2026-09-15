@@ -1,0 +1,9 @@
+# Composer dependencies
+/vendor/
+
+# PHPUnit result cache
+/.phpunit.cache/
+
+# Local credentials and run state
+.env
+metadata.json

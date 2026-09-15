@@ -57,8 +57,7 @@ private fun flushAtDeadline(cursors: AtomicReference<Cursors>, deadline: Duratio
 
 `Cursors` is an immutable data class in an `AtomicReference`, not a mutable object behind
 a lock, so the watchdog always reads a whole, consistent pair. There is nothing to cancel
-on the way out: `isDaemon = true` means the thread does not hold the JVM open, which is
-this design's answer to Python's `signal.alarm(0)`.
+on the way out: `isDaemon = true` means the thread does not hold the JVM open.
 
 A `withTimeout` coroutine would be the more fashionable choice and the wrong one here.
 Cancellation in structured concurrency is cooperative, and this run is blocking HTTP from
