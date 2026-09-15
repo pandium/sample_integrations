@@ -40,7 +40,7 @@ export const pokemonSync = async (
         nextPokemonId = pokemonId
         break
     }
-    if (!nextPokemonId) return { last_pokemon_id: lastPokemonId }
+    if (nextPokemonId === undefined) return { last_pokemon_id: lastPokemonId }
 
     const pokemonOfTheDay = await pokeClient.getPokemonByName(nextPokemonId)
 
