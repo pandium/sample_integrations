@@ -1,0 +1,14 @@
+# Compiled artifacts and build output
+bin/
+obj/
+
+# Published output
+publish/
+
+# Local credentials and run state
+.env
+metadata.json
+
+# IDE state
+.vs/
+.idea/
