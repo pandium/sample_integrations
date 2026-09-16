@@ -10,7 +10,7 @@ import org.json.JSONObject;
 interface ShipBobClient {
     List<JSONObject> newOrdersPage(OffsetDateTime startDate, int page);
 
-    List<JSONObject> updatedOrdersPage(OffsetDateTime startDate, int page);
-
-    OffsetDateTime updateDate(JSONObject order, OffsetDateTime startDate);
+    /** now is the run's fixed current time, needed to sort by ShipBobApi.updateDate without
+     * re-reading the real clock mid-sort. */
+    List<JSONObject> updatedOrdersPage(OffsetDateTime startDate, int page, OffsetDateTime now);
 }

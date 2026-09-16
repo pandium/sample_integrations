@@ -40,14 +40,8 @@ final class FakeShipBobClient implements ShipBobClient {
     }
 
     @Override
-    public List<JSONObject> updatedOrdersPage(OffsetDateTime cursor, int page) {
+    public List<JSONObject> updatedOrdersPage(OffsetDateTime cursor, int page, OffsetDateTime now) {
         return servePage("updated", updatedPages, page);
-    }
-
-    @Override
-    public OffsetDateTime updateDate(JSONObject order, OffsetDateTime cursor) {
-        String lastUpdateAt = order.getJSONArray("shipments").getJSONObject(0).getString("last_update_at");
-        return Util.parseTimestamp(lastUpdateAt).orElseThrow();
     }
 }
 

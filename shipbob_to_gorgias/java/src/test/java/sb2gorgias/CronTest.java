@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -56,7 +57,7 @@ class CronTest {
 
         JSONObject finalCustomer = gorgias.updateLog.get(gorgias.updateLog.size() - 1).getValue();
         var finalOrders = finalCustomer.getJSONObject("data").getJSONObject("pandium").getJSONArray("shipbob_orders");
-        List<Long> ids = new java.util.ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (int i = 0; i < finalOrders.length(); i++) {
             ids.add(finalOrders.getJSONObject(i).getLong("id"));
         }

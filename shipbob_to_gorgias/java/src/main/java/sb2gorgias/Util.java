@@ -7,7 +7,6 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
-import java.util.regex.Pattern;
 
 import org.json.JSONObject;
 
@@ -40,10 +39,6 @@ final class Util {
         return s.length() > n ? s.substring(0, n) : s;
     }
 
-    // ShipBob sends 7-digit fractional seconds; Java's parsers take at most 9 but clamp does
-    // string-prefix comparisons that assume a fixed 6-digit width, matching every other port.
-    private static final Pattern TRIM_LONG_FRACTION = Pattern.compile("(\\.\\d{6})\\d+");
-
     private static final DateTimeFormatter[] TIMESTAMP_LAYOUTS = {
         DateTimeFormatter.ISO_OFFSET_DATE_TIME,
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss[.SSSSSS]"),
@@ -51,15 +46,15 @@ final class Util {
     };
 
     /** Parses a ShipBob- or Pandium-shaped timestamp string, trying progressively looser
-     * layouts. Empty when unparseable. A value with no offset is treated as UTC. */
+     * layouts. Empty when unparseable. A value with no offset is treated as UTC. ISO_OFFSET_DATE_TIME
+     * accepts any number of fractional digits, so ShipBob's 7-digit fractions parse as-is. */
     static Optional<OffsetDateTime> parseTimestamp(String value) {
         if (value == null || value.isEmpty()) {
             return Optional.empty();
         }
-        String trimmed = TRIM_LONG_FRACTION.matcher(value).replaceAll("$1");
         for (DateTimeFormatter layout : TIMESTAMP_LAYOUTS) {
             try {
-                var accessor = layout.parseBest(trimmed, OffsetDateTime::from, LocalDateTime::from, LocalDate::from);
+                var accessor = layout.parseBest(value, OffsetDateTime::from, LocalDateTime::from, LocalDate::from);
                 if (accessor instanceof OffsetDateTime odt) {
                     return Optional.of(odt.withOffsetSameInstant(ZoneOffset.UTC));
                 }

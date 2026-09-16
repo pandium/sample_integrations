@@ -11,10 +11,14 @@ final class Main {
     }
 
     static JSONObject run(String mode, Pandium pandium) {
-        if ("webhook".equals(mode)) {
-            return Webhook.webhookRun(pandium);
-        }
-        return Cron.cronRun(pandium);
+        return switch (mode) {
+            // Webhook mode: ShipBob order webhook deliveries (Pandium debounces them into
+            // one run) -> a Gorgias ticket per shipment status not seen yet.
+            case "webhook" -> Webhook.webhookRun(pandium);
+
+            // Normal mode: the scheduled ShipBob orders -> Gorgias customer sync.
+            case null, default -> Cron.cronRun(pandium);
+        };
     }
 
     public static void main(String[] args) {

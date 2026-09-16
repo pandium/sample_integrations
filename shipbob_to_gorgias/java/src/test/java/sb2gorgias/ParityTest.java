@@ -14,6 +14,7 @@ class ParityTest {
         JSONObject order = Helpers.makeOrder(1, "2026-07-01T00:00:00Z", "jane@example.com");
         JSONObject event = Helpers.makeShipmentEvent(1, "Delivered", "jane@example.com", null);
 
-        assertEquals(GorgiasApi.customerKey(order), GorgiasApi.customerKey(event));
+        assertEquals(GorgiasApi.customerKey(GorgiasApi.recipientOf(order)),
+                GorgiasApi.customerKey(GorgiasApi.recipientOf(event)));
     }
 }

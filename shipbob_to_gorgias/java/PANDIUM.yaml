@@ -3,10 +3,11 @@ base: Java:25
 build: mvn clean package
 run: java -jar target/sb2gorgias-1.0-jar-with-dependencies.jar
 
-# Supplies the PAN_SEC_* credentials the clients read: SHIPBOB_ACCESS_TOKEN and
-# SHIPBOB_WEBHOOK_SECRET; GORGIAS-OAUTH_ACCESS_TOKEN and GORGIAS-OAUTH_ACCOUNT.
-# Both are OAuth2 connectors: Pandium runs the authorization flow when a tenant
-# connects and refreshes the tokens, so the integration only reads access tokens.
+# Supplies the PAN_SEC_* credentials the clients read: SHIPBOB_ACCESS_TOKEN,
+# GORGIAS-OAUTH_ACCESS_TOKEN, and GORGIAS-OAUTH_ACCOUNT. Both are OAuth2
+# connectors: Pandium runs the authorization flow when a tenant connects and
+# refreshes the tokens, so the integration only reads access tokens. Webhook
+# deliveries are signature-verified by Pandium before a run ever starts.
 connectors:
   - shipbob
   - gorgias-oauth

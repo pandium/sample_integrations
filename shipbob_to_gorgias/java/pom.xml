@@ -50,8 +50,6 @@
                 <configuration>
                     <descriptorRefs>
                         <descriptorRef>jar-with-dependencies</descriptorRef>
-                        <descriptorRef>bin</descriptorRef>
-                        <descriptorRef>src</descriptorRef>
                     </descriptorRefs>
                     <archive>
                         <manifest>
@@ -87,11 +85,6 @@
             <groupId>io.github.cdimascio</groupId>
             <artifactId>dotenv-java</artifactId>
             <version>3.2.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.konghq</groupId>
-            <artifactId>unirest-java-core</artifactId>
-            <version>4.10.0</version>
         </dependency>
         <dependency>
             <groupId>org.json</groupId>

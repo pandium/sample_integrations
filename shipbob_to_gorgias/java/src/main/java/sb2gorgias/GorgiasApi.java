@@ -1,15 +1,23 @@
 package sb2gorgias;
 
 import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+/** Who a ShipBob order or shipment event ships to. Both flows key their Gorgias customer off
+ * this. */
+record Recipient(String name, String email, Address address) {
+}
+
+record Address(String address1, String city, String country) {
+}
 
 /** Gorgias API client.
  *
@@ -31,14 +39,10 @@ final class GorgiasApi implements GorgiasClient {
             + "@([-!#-'*+/-9=?A-Z^-~]+(\\.[-!#-'*+/-9=?A-Z^-~]+)*|\\[[\\t -Z^-~]*])"
     );
 
-    // Captures the date/time portion of a ShipBob ISO timestamp, ignoring the fractional
-    // seconds and offset entirely. Works on the raw string instead of a full parse, since
-    // ShipBob timestamps are UTC-only - there is no timezone to convert, and this is a
-    // display-only format for the customer sidebar.
-    private static final Pattern ISO_RE = Pattern.compile("^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})");
+    private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss 'UTC'");
 
     final String apiUrl;
-    final HttpClient httpClient;
+    final ApiClient apiClient;
 
     GorgiasApi(Pandium pandium) {
         Map<String, String> secrets = pandium.secrets;
@@ -55,7 +59,7 @@ final class GorgiasApi implements GorgiasClient {
             tokenType = "Bearer";
         }
         // Exponential backoff: 2s, 4s, 8s, ... GET/POST/PUT are all retried.
-        this.httpClient = new HttpClient(apiUrl, tokenType + " " + token, Duration.ofSeconds(2),
+        this.apiClient = new ApiClient(apiUrl, tokenType + " " + token, Duration.ofSeconds(2),
                 Set.of("GET", "POST", "PUT"));
     }
 
@@ -74,7 +78,7 @@ final class GorgiasApi implements GorgiasClient {
             return null;
         }
 
-        Object res = httpClient.get("/customers", query);
+        Object res = apiClient.get("/customers", query);
         JSONObject body = res instanceof JSONObject j ? j : new JSONObject();
         JSONArray rows = body.optJSONArray("data");
         if (rows == null || rows.isEmpty()) {
@@ -83,8 +87,10 @@ final class GorgiasApi implements GorgiasClient {
         }
 
         JSONObject first = rows.optJSONObject(0);
-        Object id = first == null ? null : first.opt("id");
-        Object detail = httpClient.get("/customers/" + id, null);
+        if (first == null || !first.has("id") || first.isNull("id")) {
+            throw new IllegalStateException("Gorgias customer has no id");
+        }
+        Object detail = apiClient.get("/customers/" + first.get("id"), null);
         LOGGER.info("customer found");
         return detail instanceof JSONObject j ? j : null;
     }
@@ -94,20 +100,23 @@ final class GorgiasApi implements GorgiasClient {
         LOGGER.info("creating new gorgias customer");
         Object res;
         try {
-            res = httpClient.post("/customers", payload);
+            res = apiClient.post("/customers", payload);
         } catch (RuntimeException e) {
             LOGGER.error("create customer failed", e);
             throw e;
         }
+        if (!(res instanceof JSONObject j) || !j.has("id") || j.isNull("id")) {
+            throw new IllegalStateException("Gorgias created a customer without an id");
+        }
         LOGGER.info("customer created successfully");
-        return res instanceof JSONObject j ? j.optLong("id") : 0;
+        return j.optLong("id");
     }
 
     @Override
     public void updateCustomer(long id, JSONObject payload) {
         LOGGER.info("updating gorgias customer {}", id);
         try {
-            httpClient.put("/customers/" + id, payload);
+            apiClient.put("/customers/" + id, payload);
         } catch (RuntimeException e) {
             LOGGER.error("update customer {} failed", id, e);
             throw e;
@@ -120,7 +129,7 @@ final class GorgiasApi implements GorgiasClient {
         LOGGER.info("creating gorgias ticket");
         Object res;
         try {
-            res = httpClient.post("/tickets", payload);
+            res = apiClient.post("/tickets", payload);
         } catch (RuntimeException e) {
             LOGGER.error("create ticket failed", e);
             throw e;
@@ -136,30 +145,37 @@ final class GorgiasApi implements GorgiasClient {
         return "";
     }
 
-    /** The key identifying an order's customer: a valid recipient email when present,
-     * otherwise a synthetic "name address1 city country". */
-    static String customerKey(JSONObject order) {
-        String email = validEmail(Util.asString(Util.deepGet(order, "recipient.email", "")));
+    /** Reads the recipient common to both a ShipBob order and a shipment event - same shape,
+     * same field names - so both flows can key their Gorgias customer off one extraction. */
+    static Recipient recipientOf(JSONObject data) {
+        JSONObject recipient = data.optJSONObject("recipient");
+        if (recipient == null) {
+            return new Recipient("", "", new Address("", "", ""));
+        }
+        JSONObject address = recipient.optJSONObject("address");
+        Address addr = address == null ? new Address("", "", "") : new Address(
+                address.optString("address1", ""), address.optString("city", ""), address.optString("country", ""));
+        return new Recipient(recipient.optString("name", ""), recipient.optString("email", ""), addr);
+    }
+
+    /** The key identifying a recipient's customer: a valid email when present, otherwise a
+     * synthetic "name address1 city country". */
+    static String customerKey(Recipient recipient) {
+        String email = validEmail(recipient.email());
         if (!email.isEmpty()) {
             return email;
         }
-        Object addressObj = Util.deepGet(order, "recipient.address", new JSONObject());
-        JSONObject address = addressObj instanceof JSONObject a ? a : new JSONObject();
-        return String.join(" ",
-                Util.asString(Util.deepGet(order, "recipient.name", "")),
-                Util.asString(Util.deepGet(address, "address1", "")),
-                Util.asString(Util.deepGet(address, "city", "")),
-                Util.asString(Util.deepGet(address, "country", ""))
-        );
+        Address address = recipient.address();
+        return String.join(" ", recipient.name(), address.address1(), address.city(), address.country());
     }
 
     /** Body for POST /customers when the customer does not yet exist. */
-    static JSONObject newCustomerPayload(JSONObject order, String key) {
+    static JSONObject newCustomerPayload(Recipient recipient, String key) {
         JSONObject payload = new JSONObject();
-        payload.put("name", Util.deepGet(order, "recipient.name", ""));
+        payload.put("name", recipient.name());
         payload.put("external_id", key);
         payload.put("data", new JSONObject().put("pandium", new JSONObject().put("shipbob_orders", new JSONArray())));
-        String email = validEmail(Util.asString(Util.deepGet(order, "recipient.email", "")));
+        String email = validEmail(recipient.email());
         if (!email.isEmpty()) {
             payload.put("email", email);
         }
@@ -206,11 +222,6 @@ final class GorgiasApi implements GorgiasClient {
         if (value == null || value.isEmpty()) {
             return "";
         }
-        Matcher m = ISO_RE.matcher(value);
-        if (!m.find()) {
-            return value;
-        }
-        return String.format("%s/%s/%s %s:%s:%s UTC", m.group(3), m.group(2), m.group(1), m.group(4), m.group(5),
-                m.group(6));
+        return Util.parseTimestamp(value).map(DISPLAY_DATE::format).orElse(value);
     }
 }

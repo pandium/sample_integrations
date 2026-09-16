@@ -3,12 +3,10 @@ package sb2gorgias;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +35,7 @@ final class ShipBobApi implements ShipBobClient {
     static final String DEFAULT_BASE_URL = "https://api.shipbob.com/2026-01";
 
     final String apiUrl;
-    final HttpClient httpClient;
+    final ApiClient apiClient;
 
     ShipBobApi(Pandium pandium) {
         String token = pandium.secrets.get("shipbob_access_token");
@@ -46,7 +44,7 @@ final class ShipBobApi implements ShipBobClient {
         }
         this.apiUrl = resolveBaseUrl(token);
         // Exponential backoff: 3s, 6s, 12s, ... Only GET is ever called by this client.
-        this.httpClient = new HttpClient(apiUrl, "Bearer " + token, Duration.ofSeconds(3), Set.of("GET"));
+        this.apiClient = new ApiClient(apiUrl, "Bearer " + token, Duration.ofSeconds(3), Set.of("GET"));
     }
 
     /** Decodes the JWT payload and maps its iss claim to an API base URL. */
@@ -70,7 +68,7 @@ final class ShipBobApi implements ShipBobClient {
     private List<JSONObject> getOrders(Map<String, String> params) {
         Object data;
         try {
-            data = httpClient.get("/order", params);
+            data = apiClient.get("/order", params);
         } catch (RuntimeException e) {
             LOGGER.error("ShipBob order fetch failed ({})", params, e);
             throw e;
@@ -107,26 +105,30 @@ final class ShipBobApi implements ShipBobClient {
      * update keeps the sync conservative: a timed-out run never skips an update, at the cost
      * of some reprocessing (which is harmless - customer writes are idempotent PUTs). */
     @Override
-    public List<JSONObject> updatedOrdersPage(OffsetDateTime startDate, int page) {
+    public List<JSONObject> updatedOrdersPage(OffsetDateTime startDate, int page, OffsetDateTime now) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("LastUpdateStartDate", startDate.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         params.put("Page", String.valueOf(page));
         List<JSONObject> orders = getOrders(params);
-        // Computed once per order since updateDate() can fall back to now(), which must stay
-        // stable across a single sort.
-        Map<JSONObject, OffsetDateTime> updateDates = new IdentityHashMap<>();
-        for (JSONObject order : orders) {
-            updateDates.put(order, updateDate(order, startDate));
+        record Dated(JSONObject order, OffsetDateTime date) {
         }
-        orders.sort(Comparator.comparing(updateDates::get).reversed());
-        return orders;
+        List<Dated> dated = new ArrayList<>();
+        for (JSONObject order : orders) {
+            dated.add(new Dated(order, updateDate(order, startDate, now)));
+        }
+        dated.sort(Comparator.comparing(Dated::date).reversed());
+        List<JSONObject> sorted = new ArrayList<>();
+        for (Dated d : dated) {
+            sorted.add(d.order());
+        }
+        return sorted;
     }
 
     /** The oldest shipment last_update_at on order that still falls after startDate; defaults
-     * to now when none qualify. */
-    @Override
-    public OffsetDateTime updateDate(JSONObject order, OffsetDateTime startDate) {
-        OffsetDateTime updateDate = OffsetDateTime.now(ZoneOffset.UTC);
+     * to now when none qualify. now is passed in, not read from the clock, so repeated calls
+     * for the same order are stable within a single sort. */
+    static OffsetDateTime updateDate(JSONObject order, OffsetDateTime startDate, OffsetDateTime now) {
+        OffsetDateTime updateDate = now;
         if (order.opt("shipments") instanceof JSONArray shipments) {
             for (int i = 0; i < shipments.length(); i++) {
                 JSONObject shipment = shipments.optJSONObject(i);

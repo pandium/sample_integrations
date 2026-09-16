@@ -138,8 +138,9 @@ final class Cron {
      * multiple orders for one customer batch onto the same record. */
     static void processOrder(JSONObject order, GorgiasClient gorgias, Map<String, JSONObject> cache,
             boolean newestFirst) {
-        String key = GorgiasApi.customerKey(order);
-        String email = GorgiasApi.validEmail(Util.asString(Util.deepGet(order, "recipient.email", "")));
+        Recipient recipient = GorgiasApi.recipientOf(order);
+        String key = GorgiasApi.customerKey(recipient);
+        String email = GorgiasApi.validEmail(recipient.email());
 
         JSONObject customer = cache.get(key);
         if (customer == null) {
@@ -168,7 +169,7 @@ final class Cron {
                 customer.put("id", existing.get("id"));
                 customer.put("data", data);
             } else {
-                customer = GorgiasApi.newCustomerPayload(order, key);
+                customer = GorgiasApi.newCustomerPayload(recipient, key);
             }
             cache.put(key, customer);
         }
@@ -265,7 +266,7 @@ final class Cron {
         CursorState state = new CursorState(formatCursor(newCursor), formatCursor(updatedCursor));
 
         Runnable cancel = deps.armWatchdog.arm(ALARM_DURATION, () -> {
-            LOGGER.error("approaching the run-time limit; flushing cursor for the next run");
+            LOGGER.warn("approaching the run-time limit; flushing cursor for the next run");
             // Same writer the normal path uses, so there is exactly one route to stdout.
             pandium.updateMetadata(state.snapshot());
             deps.exit.accept(0); // timed-out run still counts as successful -> partial cursor merged
@@ -291,11 +292,9 @@ final class Cron {
             for (JSONObject order : orders) {
                 LOGGER.info("processing new order; order_id={}", order.opt("id"));
                 processOrder(order, deps.gorgias, cache, newestFirst);
-                // created_date is YYYY-MM-DDThh:mm:ss.sssssss+00:00; trim to 26 chars for a
-                // valid (naive, microsecond) date-time.
-                String created = order.optString("created_date", "");
-                if (!created.isEmpty()) {
-                    state.setNew(Util.trimTo(created, 26));
+                Optional<OffsetDateTime> created = Util.parseTimestamp(order.optString("created_date", ""));
+                if (created.isPresent()) {
+                    state.setNew(formatCursor(created.get()));
                 }
             }
             page++;
@@ -314,7 +313,7 @@ final class Cron {
         while (true) {
             List<JSONObject> orders;
             try {
-                orders = deps.shipBob.updatedOrdersPage(updatedCursor, page);
+                orders = deps.shipBob.updatedOrdersPage(updatedCursor, page, now);
             } catch (RuntimeException e) {
                 cancel.run();
                 throw e;
@@ -325,7 +324,7 @@ final class Cron {
             for (JSONObject order : orders) {
                 LOGGER.info("processing updated order; order_id={}", order.opt("id"));
                 processOrder(order, deps.gorgias, cache, newestFirst);
-                OffsetDateTime updateDate = deps.shipBob.updateDate(order, updatedCursor);
+                OffsetDateTime updateDate = ShipBobApi.updateDate(order, updatedCursor, now);
                 if (oldestUpdate == null || updateDate.isBefore(oldestUpdate)) {
                     oldestUpdate = updateDate;
                 }

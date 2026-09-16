@@ -16,12 +16,142 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** One reason ShipBob attached to a status, e.g. "Invalid Address". */
+record StatusDetail(String name, String description) {
+    static StatusDetail of(JSONObject json) {
+        return new StatusDetail(json.optString("name", ""), json.optString("description", ""));
+    }
+}
+
+record Tracking(String carrier, String trackingNumber) {
+    static Tracking of(JSONObject json) {
+        if (json == null) {
+            return new Tracking("", "");
+        }
+        return new Tracking(json.optString("carrier", ""), json.optString("tracking_number", ""));
+    }
+}
+
+record InventoryItem(long quantity) {
+    static InventoryItem of(JSONObject json) {
+        return new InventoryItem(Util.toLong(json.opt("quantity")));
+    }
+}
+
+record Product(String name, String sku, String referenceId, List<InventoryItem> inventoryItems) {
+    static Product of(JSONObject json) {
+        List<InventoryItem> items = new ArrayList<>();
+        JSONArray raw = json.optJSONArray("inventory_items");
+        if (raw != null) {
+            for (int i = 0; i < raw.length(); i++) {
+                if (raw.opt(i) instanceof JSONObject o) {
+                    items.add(InventoryItem.of(o));
+                }
+            }
+        }
+        return new Product(json.optString("name", ""), json.optString("sku", ""),
+                json.optString("reference_id", ""), items);
+    }
+
+    /** The sku if there is one, else the reference_id. */
+    String skuOrReferenceId() {
+        return !sku.isEmpty() ? sku : referenceId;
+    }
+}
+
+/** ShipBob's order-related topics (order_shipped, shipment_delivered, shipment_exception,
+ * shipment_onhold, shipment_cancelled) all deliver this same shape, differing only in status
+ * and statusDetails. Every field here drives a decision in buildTicket, so it is worth
+ * pulling out of the raw JSON once instead of re-reading it ad hoc. */
+record ShipmentEvent(
+        String shipmentId,
+        String orderId,
+        String referenceId,
+        String status,
+        List<StatusDetail> statusDetails,
+        Tracking tracking,
+        String deliveryDate,
+        List<Product> products,
+        Recipient recipient) {
+
+    /** ShipBob names the shipment id "id" on the webhook body; older docs and some topics call
+     * it "shipment_id". Accept either. */
+    private static String idString(Object v) {
+        return (v == null || v == JSONObject.NULL) ? "" : String.valueOf(v);
+    }
+
+    static ShipmentEvent of(JSONObject json) {
+        String id = idString(json.opt("id"));
+        String shipmentId = !id.isEmpty() ? id : idString(json.opt("shipment_id"));
+
+        List<StatusDetail> details = new ArrayList<>();
+        JSONArray rawDetails = json.optJSONArray("status_details");
+        if (rawDetails != null) {
+            for (int i = 0; i < rawDetails.length(); i++) {
+                if (rawDetails.opt(i) instanceof JSONObject o && !o.isEmpty()) {
+                    details.add(StatusDetail.of(o));
+                }
+            }
+        }
+
+        List<Product> products = new ArrayList<>();
+        JSONArray rawProducts = json.optJSONArray("products");
+        if (rawProducts != null) {
+            for (int i = 0; i < rawProducts.length(); i++) {
+                if (rawProducts.opt(i) instanceof JSONObject o) {
+                    products.add(Product.of(o));
+                }
+            }
+        }
+
+        String status = json.optString("status", "");
+        return new ShipmentEvent(
+                shipmentId,
+                json.optString("order_id", ""),
+                json.optString("reference_id", ""),
+                status.isEmpty() ? "Updated" : status,
+                details,
+                Tracking.of(json.optJSONObject("tracking")),
+                json.optString("delivery_date", ""),
+                products,
+                GorgiasApi.recipientOf(json));
+    }
+
+    /** The merchant's own order reference, falling back to ShipBob's order id. */
+    String orderReference() {
+        return !referenceId.isEmpty() ? referenceId : orderId;
+    }
+
+    /** The human-readable reasons ShipBob attached to this status, e.g. "Invalid Address;
+     * Payment Failure". Empty for statuses that carry none. */
+    String statusDetailsText() {
+        List<String> reasons = new ArrayList<>();
+        for (StatusDetail detail : statusDetails) {
+            reasons.add(!detail.description().isEmpty() ? detail.description() : detail.name());
+        }
+        return String.join("; ", reasons);
+    }
+
+    /** One line per product on the shipment: "4 x 16 oz. Shampoo (PIN-100)". */
+    String itemsText() {
+        List<String> lines = new ArrayList<>();
+        for (Product product : products) {
+            long quantity = 0;
+            for (InventoryItem item : product.inventoryItems()) {
+                quantity += item.quantity();
+            }
+            String sku = product.skuOrReferenceId();
+            String line = quantity + " x " + product.name();
+            if (!sku.isEmpty()) {
+                line += " (" + sku + ")";
+            }
+            lines.add(line);
+        }
+        return String.join("\n", lines);
+    }
+}
+
 /** The webhook flow: any ShipBob order webhook -> a Gorgias ticket.
- *
- * ShipBob's order-related topics (order_shipped, shipment_delivered, shipment_exception,
- * shipment_onhold, shipment_cancelled) all deliver the same shipment object, differing only in
- * status/status_details. This flow opens a ticket for every one of them, so support sees a
- * shipment the moment it needs attention rather than only once it lands.
  *
  * Each webhook run may carry N debounced deliveries (Pandium bundles triggers that arrive
  * while a run is in flight), so we loop over every trigger. Creating a ticket is not
@@ -60,87 +190,18 @@ final class Webhook {
         return kept;
     }
 
-    private static String idString(Object v) {
-        return (v == null || v == JSONObject.NULL) ? "" : String.valueOf(v);
-    }
-
-    /** ShipBob names the shipment id "id" on the webhook body; older docs and some topics
-     * call it "shipment_id". Accept either. */
-    static String shipmentId(JSONObject event) {
-        String id = idString(Util.deepGet(event, "id", null));
-        if (!id.isEmpty()) {
-            return id;
-        }
-        return idString(Util.deepGet(event, "shipment_id", null));
-    }
-
-    /** The human-readable reasons ShipBob attached to this status, e.g. "Invalid Address;
-     * Payment Failure". Empty for statuses that carry none. */
-    static String statusDetails(JSONObject event) {
-        Object detailsObj = Util.deepGet(event, "status_details", new JSONArray());
-        JSONArray details = detailsObj instanceof JSONArray a ? a : new JSONArray();
-        List<String> reasons = new ArrayList<>();
-        for (int i = 0; i < details.length(); i++) {
-            if (details.opt(i) instanceof JSONObject d && !d.isEmpty()) {
-                String desc = d.optString("description", "");
-                reasons.add(!desc.isEmpty() ? desc : d.optString("name", ""));
-            }
-        }
-        return String.join("; ", reasons);
-    }
-
-    /** One line per product on the shipment: "4 x 16 oz. Shampoo (PIN-100)". */
-    static String items(JSONObject event) {
-        Object productsObj = Util.deepGet(event, "products", new JSONArray());
-        JSONArray products = productsObj instanceof JSONArray a ? a : new JSONArray();
-        List<String> lines = new ArrayList<>();
-        for (int i = 0; i < products.length(); i++) {
-            if (!(products.opt(i) instanceof JSONObject product)) {
-                continue;
-            }
-            long quantity = 0;
-            if (product.opt("inventory_items") instanceof JSONArray inventoryItems) {
-                for (int j = 0; j < inventoryItems.length(); j++) {
-                    if (inventoryItems.opt(j) instanceof JSONObject item) {
-                        quantity += Util.toLong(item.opt("quantity"));
-                    }
-                }
-            }
-            String sku = product.optString("sku", "");
-            if (sku.isEmpty()) {
-                sku = product.optString("reference_id", "");
-            }
-            String line = quantity + " x " + product.optString("name", "");
-            if (!sku.isEmpty()) {
-                line += " (" + sku + ")";
-            }
-            lines.add(line);
-        }
-        return String.join("\n", lines);
-    }
-
     /** Builds the POST /tickets payload for a shipment webhook of any status.
      *
      * customerRef is the {id: ...} returned by resolveCustomer. Gorgias wants the customer
      * twice - once as the ticket's owner and once as the sender of its first message - so the
      * same reference goes in both slots. */
-    static JSONObject buildTicket(JSONObject event, JSONObject customerRef) {
-        String sid = shipmentId(event);
-        String orderId = Util.asString(Util.deepGet(event, "order_id", ""));
-        String referenceId = Util.asString(Util.deepGet(event, "reference_id", ""));
-        if (referenceId.isEmpty()) {
-            referenceId = orderId;
-        }
-        String status = Util.asString(Util.deepGet(event, "status", "Updated"));
-        if (status.isEmpty()) {
-            status = "Updated";
-        }
-        String reasons = statusDetails(event);
-        String carrier = Util.asString(Util.deepGet(event, "tracking.carrier", ""));
-        String trackingNumber = Util.asString(Util.deepGet(event, "tracking.tracking_number", ""));
-        String deliveredOn = Util.trimTo(Util.asString(Util.deepGet(event, "delivery_date", "")), 10);
+    static JSONObject buildTicket(ShipmentEvent event, JSONObject customerRef) {
+        String reasons = event.statusDetailsText();
+        Tracking tracking = event.tracking();
+        String deliveredOn = Util.trimTo(event.deliveryDate(), 10);
 
-        String headline = "Shipment " + sid + " for order " + referenceId + " is now " + status + ".";
+        String headline = "Shipment " + event.shipmentId() + " for order " + event.orderReference() + " is now "
+                + event.status() + ".";
 
         // Only the parts ShipBob actually sent for this status make it into the body - an
         // OnHold shipment has no tracking, a Delivered one has no status details.
@@ -148,13 +209,13 @@ final class Webhook {
         if (!reasons.isEmpty()) {
             lines.add("Reason: " + reasons);
         }
-        if (!carrier.isEmpty() || !trackingNumber.isEmpty()) {
-            lines.add(("Tracking: " + carrier + " " + trackingNumber).trim());
+        if (!tracking.carrier().isEmpty() || !tracking.trackingNumber().isEmpty()) {
+            lines.add(("Tracking: " + tracking.carrier() + " " + tracking.trackingNumber()).trim());
         }
         if (!deliveredOn.isEmpty()) {
             lines.add("Delivered on: " + deliveredOn);
         }
-        String itemLines = items(event);
+        String itemLines = event.itemsText();
         if (!itemLines.isEmpty()) {
             lines.add("Items:\n" + itemLines);
         }
@@ -164,8 +225,8 @@ final class Webhook {
         if (!reasons.isEmpty()) {
             html.add("<p><b>Reason:</b> " + reasons + "</p>");
         }
-        if (!carrier.isEmpty() || !trackingNumber.isEmpty()) {
-            html.add("<p><b>Tracking:</b> " + carrier + " " + trackingNumber + "</p>");
+        if (!tracking.carrier().isEmpty() || !tracking.trackingNumber().isEmpty()) {
+            html.add("<p><b>Tracking:</b> " + tracking.carrier() + " " + tracking.trackingNumber() + "</p>");
         }
         if (!itemLines.isEmpty()) {
             StringBuilder li = new StringBuilder("<ul>");
@@ -181,7 +242,7 @@ final class Webhook {
         message.put("channel", "api");
         message.put("via", "api");
         message.put("from_agent", false);
-        message.put("subject", "Order " + referenceId + ": shipment " + status);
+        message.put("subject", "Order " + event.orderReference() + ": shipment " + event.status());
         message.put("body_text", bodyText);
         message.put("body_html", String.join("", html));
         // Included so Gorgias auto-reply / keyword rules can fire.
@@ -198,7 +259,7 @@ final class Webhook {
         // rules can route (e.g. OnHold) without parsing the body.
         ticket.put("tags", new JSONArray(List.of(
                 new JSONObject().put("name", SHIPMENT_TAG),
-                new JSONObject().put("name", "shipbob-" + status.toLowerCase().replace(" ", "-"))
+                new JSONObject().put("name", "shipbob-" + event.status().toLowerCase().replace(" ", "-"))
         )));
         return ticket;
     }
@@ -211,15 +272,16 @@ final class Webhook {
      * same record that carries the customer's order history. Recipient email is optional on a
      * ShipBob shipment, so the external_id path carries as much weight here as it does in the
      * cron flow. */
-    static JSONObject resolveCustomer(GorgiasClient gorgias, JSONObject event) {
-        String email = GorgiasApi.validEmail(Util.asString(Util.deepGet(event, "recipient.email", "")));
-        String key = GorgiasApi.customerKey(event);
+    static JSONObject resolveCustomer(GorgiasClient gorgias, ShipmentEvent event) {
+        Recipient recipient = event.recipient();
+        String email = GorgiasApi.validEmail(recipient.email());
+        String key = GorgiasApi.customerKey(recipient);
 
         JSONObject existing = gorgias.findCustomer(email.isEmpty() ? null : email, email.isEmpty() ? key : null);
         if (existing != null) {
             return new JSONObject().put("id", existing.get("id"));
         }
-        long newId = gorgias.createCustomer(GorgiasApi.newCustomerPayload(event, key));
+        long newId = gorgias.createCustomer(GorgiasApi.newCustomerPayload(recipient, key));
         return new JSONObject().put("id", newId);
     }
 
@@ -247,29 +309,25 @@ final class Webhook {
         // Pandium bundles debounced deliveries into one run; Pandium.webhookDeliveries reads
         // each raw body back off disk so this loop only has to deal with the event itself.
         for (WebhookDelivery delivery : pandium.webhookDeliveries()) {
-            JSONObject event;
+            ShipmentEvent event;
             try {
-                event = new JSONObject(delivery.body());
+                event = ShipmentEvent.of(new JSONObject(delivery.body()));
             } catch (JSONException e) {
                 LOGGER.error("webhook delivery is not valid JSON; delivery_id={}", delivery.id(), e);
                 continue;
             }
 
-            String sid = shipmentId(event);
-            if (sid.isEmpty()) {
+            if (event.shipmentId().isEmpty()) {
                 LOGGER.warn("webhook delivery has no shipment id; skipping; delivery_id={}", delivery.id());
                 continue;
             }
 
             // Every order webhook gets a ticket, whatever the status - the status is only
             // part of the dedupe key, never a filter.
-            String status = Util.asString(Util.deepGet(event, "status", "Updated"));
-            if (status.isEmpty()) {
-                status = "Updated";
-            }
-            String eventKey = sid + ":" + status;
+            String eventKey = event.shipmentId() + ":" + event.status();
             if (processed.containsKey(eventKey)) {
-                LOGGER.info("shipment already ticketed; skipping duplicate; shipment_id={} status={}", sid, status);
+                LOGGER.info("shipment already ticketed; skipping duplicate; shipment_id={} status={}",
+                        event.shipmentId(), event.status());
                 continue;
             }
 
@@ -277,7 +335,8 @@ final class Webhook {
             try {
                 customerRef = resolveCustomer(gorgias, event);
             } catch (RuntimeException e) {
-                LOGGER.error("could not resolve a Gorgias customer for shipment; shipment_id={}", sid, e);
+                LOGGER.error("could not resolve a Gorgias customer for shipment; shipment_id={}",
+                        event.shipmentId(), e);
                 continue; // leave unprocessed so ShipBob's retry can try again
             }
 
@@ -285,14 +344,14 @@ final class Webhook {
             try {
                 ticket = gorgias.createTicket(buildTicket(event, customerRef));
             } catch (RuntimeException e) {
-                LOGGER.error("failed to open ticket for shipment; shipment_id={}", sid, e);
+                LOGGER.error("failed to open ticket for shipment; shipment_id={}", event.shipmentId(), e);
                 continue; // leave unprocessed so ShipBob's retry can try again
             }
 
             processed.put(eventKey, nowIso); // mark handled
             created++;
             LOGGER.info("opened Gorgias ticket for shipment; ticket_id={} shipment_id={} status={}",
-                    ticket.opt("id"), sid, status);
+                    ticket.opt("id"), event.shipmentId(), event.status());
         }
 
         LOGGER.info("webhook flow complete; tickets_opened={} events_tracked={}", created, processed.size());

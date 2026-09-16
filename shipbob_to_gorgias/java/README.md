@@ -4,26 +4,26 @@ The Java implementation of the [ShipBob to Gorgias sample](../README.md). Read t
 for what the integration does and which parts of the Pandium platform it exercises; this page
 covers the code, and how to build, run, and test it.
 
-Java 25, Maven, `unirest-java-core`, `org.json`, JUnit 5. No framework, no web server.
+Java 25, Maven, `java.net.http.HttpClient`, `org.json`, JUnit 5. No framework, no web server.
 
 ## Layout
 
 ```
 java/
-├── PANDIUM.yaml                     manifest: runtime, configs, metadata schema
-├── pom.xml                          dependencies (unirest-java-core, org.json, JUnit)
+├── PANDIUM.yaml                              manifest: runtime, configs, metadata schema
+├── pom.xml                                   dependencies (org.json, JUnit)
 ├── src/main/java/sb2gorgias/
-│   ├── Main.java                     entry point; dispatches on run mode
-│   ├── Lib.java                       the Pandium runtime contract: config, secrets, context, metadata
-│   ├── HttpClient.java                 hand-rolled retry client (Unirest has no built-in backoff)
-│   ├── Cron.java                      Flow A — resumable order sync
-│   ├── Webhook.java                   Flow B — shipment status webhook -> ticket, with dedupe
-│   ├── ShipBobClient.java / ShipBobApi.java    ShipBob client
-│   └── GorgiasClient.java / GorgiasApi.java    Gorgias client
-└── src/test/java/sb2gorgias/         both flows covered end to end; no network
+│   ├── Main.java                             entry point; dispatches on run mode
+│   ├── Pandium.java                          the Pandium runtime contract: config, secrets, context, metadata
+│   ├── ApiClient.java                        hand-rolled retry client atop java.net.http.HttpClient
+│   ├── Cron.java                             Flow A — resumable order sync
+│   ├── Webhook.java                          Flow B — shipment status webhook -> ticket, with dedupe
+│   ├── ShipBobClient.java / ShipBobApi.java  ShipBob client
+│   └── GorgiasClient.java / GorgiasApi.java  Gorgias client
+└── src/test/java/sb2gorgias/                 both flows covered end to end; no network
 ```
 
-`Lib.java` is the file to read first — the whole platform contract in one file: `PAN_CFG_*`/
+`Pandium.java` is the file to read first — the whole platform contract in one file: `PAN_CFG_*`/
 `PAN_SEC_*` as plain maps, `PAN_CTX_*` as named methods, the metadata file read, and the
 single stdout write that hands metadata back to Pandium. Logging is SLF4J; every file gets its
 own named `Logger` via `LoggerFactory.getLogger`, with format and level configured in
@@ -35,30 +35,29 @@ tests use hand-written fakes implementing the same interfaces.
 
 ## Implementation notes
 
-**The run-limit deadline** is a `ScheduledExecutorService`-based watchdog in `Cron.java`,
-injectable via `Cron.Deps` so tests can trigger it deterministically without waiting 9 real
-minutes. Because it runs on a real background thread in production, the cursor state it
-shares with the paging loop (`Cron.CursorState`) only exposes `synchronized` accessors —
-every read, including log lines, goes through them.
+**The run-limit deadline** is a 9-minute watchdog in `Cron.java`: a `ScheduledExecutorService`
+arms a background timer before paging starts, and cursor state lives in `CursorState`, whose
+accessors are `synchronized` because both the main thread and the watchdog's timeout callback
+read and write it. If the timer fires first, it flushes whatever cursor progress has been made
+and exits, the same way a run that finishes cleanly on its own would.
 
 **No hand-rolled numeric-id formatting is needed.** `org.json` decodes JSON integers as
 `Integer`/`Long`, never `Double`, so there's no scientific-notation risk when an id gets
-embedded in a URL or a dedupe key — a class of bug some other ports here had to guard against
-explicitly.
+embedded in a URL or a dedupe key.
 
 **Update-date comparison and sorting use real `java.time.OffsetDateTime`** instead of string
 comparison, since ShipBob's per-shipment `last_update_at` needs to be compared and sorted
 correctly regardless of exact string format. The cursor values written back into tenant
-metadata are still formatted to match every other port's shape exactly (6-digit microseconds,
-no offset suffix) — that's a wire format other tenants' stored metadata already relies on,
-not a place to diverge.
+metadata are still formatted as a fixed 6-digit-microsecond, no-offset shape — that's a wire
+format other tenants' stored metadata already relies on, not a place to diverge.
 
-**Date formatting for the customer sidebar** works on the raw ISO string with a regex instead
-of a full parse, in `GorgiasApi.java` — ShipBob timestamps are UTC-only and this is a
-display-only value, so a full `java.time` parse would be more work for no behavioral gain.
+**Date formatting for the customer sidebar**, in `GorgiasApi.java`, shares the same
+`Util.parseTimestamp` every cursor comparison uses, then renders through a `DateTimeFormatter`
+— one timestamp mechanism for the whole integration instead of a separate regex.
 
-**HTTP retry** is hand-rolled in `HttpClient.java` (exponential backoff, a small set of
-retryable status codes) because `unirest-java-core` has no retry support of its own.
+**HTTP retry** is hand-rolled in `ApiClient.java` (exponential backoff, a small set of
+retryable status codes, an explicit request timeout) on top of `java.net.http.HttpClient`,
+which has no retry support of its own.
 
 ## Prerequisites
 

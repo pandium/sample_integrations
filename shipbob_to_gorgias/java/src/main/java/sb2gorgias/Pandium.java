@@ -28,7 +28,7 @@ record WebhookDelivery(String id, String body) {
  * methods instead.
  */
 final class Pandium {
-    private static final Logger LOGGER = LoggerFactory.getLogger("lib");
+    private static final Logger LOGGER = LoggerFactory.getLogger("pandium");
 
     final Map<String, String> config;
     final Map<String, String> secrets;
@@ -42,11 +42,15 @@ final class Pandium {
         this.context = context;
     }
 
+    static Pandium fromEnv() {
+        Map<String, String> rawEnv = loadEnv();
+        return new Pandium(fromEnvPrefix(rawEnv, "PAN_CFG_"), fromEnvPrefix(rawEnv, "PAN_SEC_"),
+                fromEnvPrefix(rawEnv, "PAN_CTX_"));
+    }
+
     // Reads a local .env for dev, merged with the real environment (which always wins); any
     // failure to read .env - missing, malformed, unreadable - falls back to the real environment
     // alone, since a dev-only convenience file must never be able to block a run.
-    private static final Map<String, String> RAW_ENV = loadEnv();
-
     private static Map<String, String> loadEnv() {
         try {
             Map<String, String> raw = new HashMap<>();
@@ -59,15 +63,11 @@ final class Pandium {
         }
     }
 
-    static Pandium fromEnv() {
-        return new Pandium(fromEnvPrefix("PAN_CFG_"), fromEnvPrefix("PAN_SEC_"), fromEnvPrefix("PAN_CTX_"));
-    }
-
     /** Collects environment variables starting with prefix, stripping the prefix and
      * lower-casing the remaining key. */
-    private static Map<String, String> fromEnvPrefix(String prefix) {
+    private static Map<String, String> fromEnvPrefix(Map<String, String> rawEnv, String prefix) {
         Map<String, String> result = new HashMap<>();
-        for (Map.Entry<String, String> entry : RAW_ENV.entrySet()) {
+        for (Map.Entry<String, String> entry : rawEnv.entrySet()) {
             if (entry.getKey().startsWith(prefix)) {
                 result.put(entry.getKey().substring(prefix.length()).toLowerCase(), entry.getValue());
             }
