@@ -50,7 +50,7 @@ module Sb2Gorgias
     # stops paging there and commits its cursor, so a failure - or a 200 carrying something
     # other than a list - raises instead.
     def get_orders(params)
-      res = @conn.get('/order', params)
+      res = @conn.get('order', params)
       raise "ShipBob order fetch failed: #{res.status}" unless res.success?
 
       data = res.body.to_s.empty? ? nil : JSON.parse(res.body)

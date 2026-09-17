@@ -1,9 +1,74 @@
 require_relative 'test_helper'
 require_relative 'fakes'
+require 'faraday'
 
 class GorgiasTest < Minitest::Test
   def setup
     @api = Sb2Gorgias::GorgiasAPI.new(make_pandium(secrets: GORGIAS_SECRETS))
+  end
+
+  # Regression tests: an absolute path ('/customers') resolved against a base URL that has
+  # its own path segment (".../api") replaces that segment instead of appending to it, per
+  # RFC 3986 merge rules -- silently dropping "/api" and hitting the bare account host,
+  # which 401s instead of routing to the API. Every @conn call must use a relative path.
+
+  # Swaps @api's connection for a Faraday test connection stubbed for one request, and
+  # returns the path actually requested.
+  def stub_request(method, stub_path, body: '{}')
+    requested_path = nil
+    stubs = Faraday::Adapter::Test::Stubs.new
+    stubs.public_send(method, stub_path) do |env|
+      requested_path = env.url.path
+      [200, {}, body]
+    end
+    @api.instance_variable_set(:@conn, Faraday.new(url: 'https://acme.gorgias.com/api') { |f| f.adapter :test, stubs })
+    yield
+    stubs.verify_stubbed_calls
+    requested_path
+  end
+
+  def test_find_customer_requests_the_api_prefixed_customers_path
+    path = stub_request(:get, '/api/customers', body: JSON.generate({ 'data' => [] })) do
+      @api.find_customer(email: 'jane@example.com')
+    end
+    assert_equal '/api/customers', path
+  end
+
+  def test_find_customer_detail_lookup_requests_the_api_prefixed_customers_path
+    detail_path = nil
+    stubs = Faraday::Adapter::Test::Stubs.new
+    stubs.get('/api/customers') { [200, {}, JSON.generate({ 'data' => [{ 'id' => 42 }] })] }
+    stubs.get('/api/customers/42') do |env|
+      detail_path = env.url.path
+      [200, {}, JSON.generate({ 'id' => 42 })]
+    end
+    @api.instance_variable_set(:@conn, Faraday.new(url: 'https://acme.gorgias.com/api') { |f| f.adapter :test, stubs })
+
+    @api.find_customer(email: 'jane@example.com')
+
+    assert_equal '/api/customers/42', detail_path
+    stubs.verify_stubbed_calls
+  end
+
+  def test_create_customer_requests_the_api_prefixed_customers_path
+    path = stub_request(:post, '/api/customers', body: JSON.generate({ 'id' => 1 })) do
+      @api.create_customer({ 'name' => 'Jane' })
+    end
+    assert_equal '/api/customers', path
+  end
+
+  def test_update_customer_requests_the_api_prefixed_customers_path
+    path = stub_request(:put, '/api/customers/7') do
+      @api.update_customer(7, { 'name' => 'Jane' })
+    end
+    assert_equal '/api/customers/7', path
+  end
+
+  def test_create_ticket_requests_the_api_prefixed_tickets_path
+    path = stub_request(:post, '/api/tickets', body: JSON.generate({ 'id' => 1 })) do
+      @api.create_ticket({ 'subject' => 'hi' })
+    end
+    assert_equal '/api/tickets', path
   end
 
   def test_valid_email_accepts_bare_addresses_and_rejects_everything_else

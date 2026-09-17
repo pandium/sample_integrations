@@ -4,6 +4,7 @@ require_relative '../shipbob'
 require 'base64'
 require 'json'
 require 'time'
+require 'faraday'
 
 class ShipBobTest < Minitest::Test
   def jwt_with_iss(iss)
@@ -48,5 +49,28 @@ class ShipBobTest < Minitest::Test
     start_date = Time.utc(2026, 7, 1)
     now = Time.utc(2026, 7, 20)
     assert_equal Sb2Gorgias.isoformat(now), Sb2Gorgias::ShipBobAPI.get_update_date({ 'shipments' => [] }, start_date, now)
+  end
+
+  # Regression test: an absolute path ('/order') resolved against a base URL that has its
+  # own path segment (".../2026-01") replaces that segment instead of appending to it, per
+  # RFC 3986 merge rules -- silently dropping the API version and 404ing. get_orders must
+  # request a relative path so it appends.
+  def test_get_new_orders_page_requests_the_versioned_order_path
+    stubs = Faraday::Adapter::Test::Stubs.new
+    requested_path = nil
+    stubs.get('/2026-01/order') do |env|
+      requested_path = env.url.path
+      [200, {}, '[]']
+    end
+
+    api = Sb2Gorgias::ShipBobAPI.new(
+      make_pandium(secrets: { 'shipbob_access_token' => jwt_with_iss('https://auth.shipbob.com') })
+    )
+    api.instance_variable_set(:@conn, Faraday.new(url: Sb2Gorgias::ShipBobAPI::DEFAULT_BASE_URL) { |f| f.adapter :test, stubs })
+
+    api.get_new_orders_page(Time.utc(2026, 1, 1), 1)
+
+    assert_equal '/2026-01/order', requested_path
+    stubs.verify_stubbed_calls
   end
 end

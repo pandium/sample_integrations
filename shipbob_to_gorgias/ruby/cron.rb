@@ -114,12 +114,15 @@ module Sb2Gorgias
     # deadline from firing - Process.exit from that thread tears down the whole process
     # regardless of what the main thread is doing at the time.
     def self.default_arm_watchdog(seconds, &on_timeout)
-      thread = Thread.new do
-        sleep(seconds)
-        on_timeout.call
-      end
       mutex = Mutex.new
       cancelled = false
+      thread = Thread.new do
+        sleep(seconds)
+        # Same mutex as cancel below, so the two can't interleave mid-callback.
+        mutex.synchronize do
+          on_timeout.call unless cancelled
+        end
+      end
       lambda do
         mutex.synchronize do
           next if cancelled

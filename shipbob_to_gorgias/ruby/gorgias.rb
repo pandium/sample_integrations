@@ -84,9 +84,10 @@ module Sb2Gorgias
     def find_customer(email: nil, external_id: nil)
       return nil if (email.nil? || email.empty?) && (external_id.nil? || external_id.empty?)
 
+      LOGGER.info("looking for Gorgias customer: #{email}, #{external_id}")
       query = email && !email.empty? ? "email=#{URI.encode_www_form_component(email.downcase)}"
                                       : "external_id=#{URI.encode_www_form_component(external_id.downcase)}"
-      res = @conn.get("/customers?#{query}")
+      res = @conn.get("customers?#{query}")
       raise "Gorgias customer lookup failed: #{res.status}" unless res.success?
 
       rows = JSON.parse(res.body)['data'] || []
@@ -95,14 +96,17 @@ module Sb2Gorgias
         return nil
       end
 
-      detail = @conn.get("/customers/#{rows[0]['id']}")
+      detail = @conn.get("customers/#{rows[0]['id']}")
+      LOGGER.info('customer found')
       JSON.parse(detail.body)
     end
 
     def create_customer(payload)
-      res = @conn.post('/customers') { |r| r.body = JSON.generate(payload) }
+      LOGGER.info('creating new Gorgias customer')
+      res = @conn.post('customers') { |r| r.body = JSON.generate(payload) }
       raise "Gorgias create customer failed: #{res.status} #{res.body}" unless res.success?
 
+      LOGGER.info('customer created successfully')
       JSON.parse(res.body)['id']
     rescue Faraday::Error => e
       LOGGER.error("create customer failed: #{e}")
@@ -110,9 +114,11 @@ module Sb2Gorgias
     end
 
     def update_customer(customer_id, payload)
-      res = @conn.put("/customers/#{customer_id}") { |r| r.body = JSON.generate(payload) }
+      LOGGER.info("updating Gorgias customer #{customer_id}")
+      res = @conn.put("customers/#{customer_id}") { |r| r.body = JSON.generate(payload) }
       raise "Gorgias update customer failed: #{res.status} #{res.body}" unless res.success?
 
+      LOGGER.info('customer updated')
       nil
     rescue Faraday::Error => e
       LOGGER.error("update customer #{customer_id} failed: #{e}")
@@ -120,7 +126,8 @@ module Sb2Gorgias
     end
 
     def create_ticket(payload)
-      res = @conn.post('/tickets') { |r| r.body = JSON.generate(payload) }
+      LOGGER.info('creating Gorgias ticket')
+      res = @conn.post('tickets') { |r| r.body = JSON.generate(payload) }
       raise "Gorgias create ticket failed: #{res.status} #{res.body}" unless res.success?
 
       JSON.parse(res.body)
