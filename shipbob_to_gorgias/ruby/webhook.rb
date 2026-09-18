@@ -43,13 +43,15 @@ module Sb2Gorgias
 
     def self.status_details(event)
       details = Sb2Gorgias.deep_get(event, 'status_details', []) || []
-      details.select { |d| d }.map { |d| d['description'] || d['name'] || '' }.join('; ')
+      details.select { |d| d }
+             .map { |d| Sb2Gorgias.loose_or(d['description'], Sb2Gorgias.loose_or(d['name'], '')) }
+             .join('; ')
     end
 
     def self.items(event)
       lines = (Sb2Gorgias.deep_get(event, 'products', []) || []).map do |product|
-        quantity = (product['inventory_items'] || []).sum { |i| i['quantity'] || 0 }
-        sku = product['sku'] || product['reference_id'] || ''
+        quantity = (product['inventory_items'] || []).sum { |i| Sb2Gorgias.loose_or(i['quantity'], 0) }
+        sku = Sb2Gorgias.loose_or(product['sku'], Sb2Gorgias.loose_or(product['reference_id'], ''))
         line = "#{quantity} x #{product['name'] || ''}"
         sku.empty? ? line : "#{line} (#{sku})"
       end
@@ -67,7 +69,7 @@ module Sb2Gorgias
       reasons = status_details(event)
       carrier = Sb2Gorgias.deep_get(event, 'tracking.carrier', '')
       tracking_number = Sb2Gorgias.deep_get(event, 'tracking.tracking_number', '')
-      delivered_on = (Sb2Gorgias.deep_get(event, 'delivery_date', '') || '')[0, 10]
+      delivered_on = Sb2Gorgias.loose_or(Sb2Gorgias.deep_get(event, 'delivery_date', ''), '')[0, 10]
       item_lines = items(event)
 
       headline = "Shipment #{sid} for order #{reference_id} is now #{status}."

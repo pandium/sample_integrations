@@ -71,6 +71,33 @@ class GorgiasTest < Minitest::Test
     assert_equal '/api/tickets', path
   end
 
+  # A POST that times out is NOT retried - Gorgias may have already processed it, and
+  # retrying could create a duplicate customer/ticket. A POST that gets back a retryable
+  # status code (429/502/503/504) still retries, since that's Gorgias itself saying try again.
+  def test_post_is_not_retried_on_timeout_but_is_retried_on_a_retryable_status
+    timeout_attempts = 0
+    stubs_timeout = Faraday::Adapter::Test::Stubs.new
+    stubs_timeout.post('/api/tickets') { timeout_attempts += 1; raise Faraday::TimeoutError, 'timed out' }
+    @api.instance_variable_set(:@conn, Faraday.new(url: 'https://acme.gorgias.com/api') do |f|
+      f.request :retry, max: 3, interval: 0, retry_statuses: [429, 502, 503, 504], methods: %i[get put],
+                         retry_if: ->(_env, exception) { exception.is_a?(Faraday::RetriableResponse) }
+      f.adapter :test, stubs_timeout
+    end)
+    assert_raises(Faraday::TimeoutError) { @api.create_ticket({ 'subject' => 'hi' }) }
+    assert_equal 1, timeout_attempts
+
+    status_attempts = 0
+    stubs_status = Faraday::Adapter::Test::Stubs.new
+    stubs_status.post('/api/tickets') { status_attempts += 1; [503, {}, 'unavailable'] }
+    @api.instance_variable_set(:@conn, Faraday.new(url: 'https://acme.gorgias.com/api') do |f|
+      f.request :retry, max: 3, interval: 0, retry_statuses: [429, 502, 503, 504], methods: %i[get put],
+                         retry_if: ->(_env, exception) { exception.is_a?(Faraday::RetriableResponse) }
+      f.adapter :test, stubs_status
+    end)
+    assert_raises(RuntimeError) { @api.create_ticket({ 'subject' => 'hi' }) }
+    assert_equal 4, status_attempts # 1 + 3 retries
+  end
+
   def test_valid_email_accepts_bare_addresses_and_rejects_everything_else
     [
       'jane@example.com',

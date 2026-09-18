@@ -1,6 +1,6 @@
 version: 1.0
 base: ruby:4.0
-build: bundle update && bundle install
+build: bundle install
 run: ruby main.rb
 
 configs:

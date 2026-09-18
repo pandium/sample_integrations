@@ -67,8 +67,11 @@ module Sb2Gorgias
       token_type = 'Bearer' if token_type.nil? || token_type.empty?
 
       @conn = Faraday.new(url: @api_url) do |f|
+        # POST isn't retried on a bare timeout - Gorgias may have already processed it, and
+        # retrying could create a duplicate. It still retries on a retryable status code.
         f.request :retry, max: 6, interval: 2, backoff_factor: 2,
-                           retry_statuses: [429, 502, 503, 504], methods: %i[get post put]
+                           retry_statuses: [429, 502, 503, 504], methods: %i[get put],
+                           retry_if: ->(_env, exception) { exception.is_a?(Faraday::RetriableResponse) }
         f.headers['Authorization'] = "#{token_type} #{token}"
         f.headers['Accept'] = 'application/json'
         f.headers['Content-Type'] = 'application/json'
@@ -85,8 +88,10 @@ module Sb2Gorgias
       return nil if (email.nil? || email.empty?) && (external_id.nil? || external_id.empty?)
 
       LOGGER.info("looking for Gorgias customer: #{email}, #{external_id}")
+      # Only email is lowercased - external_id is an exact match, and lowercasing it here
+      # wouldn't match the mixed case new_customer_payload actually stored.
       query = email && !email.empty? ? "email=#{URI.encode_www_form_component(email.downcase)}"
-                                      : "external_id=#{URI.encode_www_form_component(external_id.downcase)}"
+                                      : "external_id=#{URI.encode_www_form_component(external_id)}"
       res = @conn.get("customers?#{query}")
       raise "Gorgias customer lookup failed: #{res.status}" unless res.success?
 
@@ -97,6 +102,8 @@ module Sb2Gorgias
       end
 
       detail = @conn.get("customers/#{rows[0]['id']}")
+      raise "Gorgias customer detail fetch failed: #{detail.status}" unless detail.success?
+
       LOGGER.info('customer found')
       JSON.parse(detail.body)
     end
@@ -147,10 +154,10 @@ module Sb2Gorgias
 
       address = Sb2Gorgias.deep_get(sb_order, 'recipient.address', {})
       [
-        Sb2Gorgias.deep_get(sb_order, 'recipient.name', '') || '',
-        Sb2Gorgias.deep_get(address, 'address1', '') || '',
-        Sb2Gorgias.deep_get(address, 'city', '') || '',
-        Sb2Gorgias.deep_get(address, 'country', '') || '',
+        Sb2Gorgias.loose_or(Sb2Gorgias.deep_get(sb_order, 'recipient.name', ''), ''),
+        Sb2Gorgias.loose_or(Sb2Gorgias.deep_get(address, 'address1', ''), ''),
+        Sb2Gorgias.loose_or(Sb2Gorgias.deep_get(address, 'city', ''), ''),
+        Sb2Gorgias.loose_or(Sb2Gorgias.deep_get(address, 'country', ''), ''),
       ].join(' ')
     end
 

@@ -52,7 +52,15 @@ literal `0`).
 **Timestamp comparisons are plain string comparisons**, not parsed-datetime comparisons, to
 stay resumable across pages: cursors are trimmed to a fixed width (26 or 23 characters,
 depending on which cursor) so two timestamps of different precision still compare correctly
-lexicographically.
+lexicographically. The updated-orders cursor is the minimum update date seen across every
+page, committed once the whole query is exhausted — not the last order processed, since pages
+aren't sorted relative to each other and an unread page could carry an older update.
+
+**`GorgiasAPI`'s POST requests aren't retried on a timeout**, only on a retryable status code
+(429/502/503/504). A POST creates a customer or ticket; retrying one after a timeout risks
+creating a duplicate if Gorgias actually processed the first attempt and merely responded
+late. GET and PUT stay unconditional, since a lookup has no side effect and a full-state
+update is safe to repeat either way.
 
 ## Prerequisites
 
