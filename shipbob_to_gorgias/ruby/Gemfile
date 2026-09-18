@@ -1,0 +1,12 @@
+source 'https://rubygems.org'
+
+ruby '>= 3.1'
+
+gem 'faraday', '~> 2.9'
+gem 'faraday-retry', '~> 2.2'
+gem 'base64', '~> 0.2' # default gem through Ruby 3.3, bundled (not default) from 3.4 on
+
+group :test do
+  gem 'minitest', '~> 5.24'
+  gem 'rake', '~> 13.0'
+end
