@@ -1,50 +1,43 @@
-// To get Access to the .env where Pandium secrets, configs, and context can be accessed.
-import * as dotenv from "dotenv";
-dotenv.config();
-import { WebClient } from "@slack/web-api";
-import Pokedex from "pokedex-promise-v2";
-import { Config, Secret, Context } from "./lib.js";
-import { pokemonSync } from "./processLogic/pokemonSync.js";
-import { initSync } from "./processLogic/initSync.js";
+import * as dotenv from 'dotenv'
+dotenv.config({ quiet: true })
+import log4js from 'log4js'
+import { WebClient } from '@slack/web-api'
+import Pokedex from 'pokedex-promise-v2'
+import { Pandium } from './lib.js'
+import { pokemonSync } from './processLogic/pokemonSync.js'
+import { initSync } from './processLogic/initSync.js'
 
-const run = async () => {
-  const context = new Context();
-  const secrets = new Secret();
-  const config = new Config();
+// lib.js configures log4js; this just gets a logger named for this file.
+const logger = log4js.getLogger('index')
 
-  // Pandium integrations can be run in 'init' or 'normal' mode.
-  // When the integration is run on Pandium, Pandium will provide run_mode through context.
-  // During loval development run mode is defined in the .env as PAN_CTX_RUN_MODE
-  console.error(`This run is in mode: ${context["run_mode"]}`);
-  console.error("------------------------CONFIG------------------------");
-  console.error(config);
+const main = async () => {
+    // Everything Pandium passed to this run: configs, secrets, and context.
+    // Locally, `pandium local run <tenant-id>` supplies the same values from the tenant.
+    const pandium = Pandium.fromEnv()
+    logger.info(`This run is in mode: ${pandium.runMode()}`)
+    logger.info(`Tenant configs: ${JSON.stringify(pandium.config)}`)
 
-  console.error("------------------------CONTEXT------------------------");
-  console.error(context);
+    const pokeClient = new Pokedex()
+    const slackClient = new WebClient(pandium.secrets.slack_oauth_access_token)
 
-  const pokeClient = new Pokedex();
-  const slackClient = new WebClient(secrets.slack_oauth_access_token);
+    // Pandium integrations can be run in 'init' or 'normal' mode.
+    // Each flow returns the metadata to save for the tenant; updateMetadata prints it
+    // to stdout, where Pandium reads it back at the end of the run.
+    if (pandium.runMode() === 'normal') {
+        const metadata = await pokemonSync(pokeClient, slackClient, pandium)
+        pandium.updateMetadata(metadata)
+    } else {
+        const metadata = await initSync(pokeClient, slackClient)
+        pandium.updateMetadata(metadata)
+    }
+}
 
-  if (context.run_mode === "normal") {
-    const standardOut = await pokemonSync(
-      pokeClient,
-      slackClient,
-      context,
-      config
-    );
-    console.log(JSON.stringify(standardOut));
-  } else {
-    const initStandardOut = await initSync(pokeClient, slackClient);
-    console.log(JSON.stringify(initStandardOut));
-  }
-};
-
-// Waiting for the resolution of the run function's promise is the entry point for the whole integration.
-run().then(
-  // When the promise is resolved no further action needed.
-  () => {},
-  // When the promise is rejected a nonzero exit code will fail the run.
-  () => {
-    process.exitCode = 1;
-  }
-);
+// Waiting for the resolution of the main function's promise is the entry point for the whole integration.
+main().then(
+    // When the promise is resolved no further action needed.
+    () => {},
+    // When the promise is rejected a nonzero exit code will fail the run.
+    () => {
+        process.exitCode = 1
+    }
+)
